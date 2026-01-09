@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { Sidebar } from "@/components/sidebar";
 import { ThemeProvider } from "@/components/theme-provider";
+import { FeedbackButton } from "@/components/feedback-button";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
@@ -31,6 +32,7 @@ export default function RootLayout({
               <div className="p-8">{children}</div>
             </main>
           </div>
+          <FeedbackButton />
         </ThemeProvider>
       </body>
     </html>
