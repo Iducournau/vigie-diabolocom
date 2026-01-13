@@ -17,6 +17,10 @@ import {
   RotateCcw,
   Loader2,
   Copy,
+  Phone,
+  User,
+  Calendar,
+  AlertCircle,
 } from "lucide-react";
 
 // Types
@@ -95,6 +99,14 @@ const CAMPAIGNS_MAP: Record<string, string> = {
   "3510": "ACCORD NON RESPECTÉ",
 };
 
+// Mapping des états
+const STATE_LABELS: Record<string, string> = {
+  "processing_not_in_progress": "En attente de traitement",
+  "processing_in_progress": "En cours de traitement",
+  "processed": "Traité",
+  "excluded": "Exclu",
+};
+
 // Mapping des actions pour l'affichage
 const ACTION_LABELS: Record<string, string> = {
   acknowledged: "Prise en charge",
@@ -122,6 +134,27 @@ function formatTimeAgo(date: Date): string {
   if (diffMins < 60) return `Il y a ${diffMins} min`;
   if (diffHours < 24) return `Il y a ${diffHours}h`;
   return `Il y a ${diffDays}j`;
+}
+
+function formatDate(dateString: string): string {
+  const date = new Date(dateString);
+  return date.toLocaleDateString("fr-FR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function formatPhone(phone: string): string {
+  if (!phone) return "";
+  // Format: 33187522709 → +33 1 87 52 27 09
+  if (phone.startsWith("33")) {
+    const digits = phone.slice(2);
+    return `+33 ${digits.slice(0, 1)} ${digits.slice(1, 3)} ${digits.slice(3, 5)} ${digits.slice(5, 7)} ${digits.slice(7, 9)}`;
+  }
+  return phone;
 }
 
 function getStatusColor(status: string): string {
@@ -195,6 +228,14 @@ export default function AlertDetailPage() {
         hoursWithoutCall,
         priority: alertData.priority,
         triesNumber: alertData.triesNumber,
+        // Nouvelles infos
+        phone: alertData.contactCardDisplayNumber || null,
+        lastAgent: alertData.lastUpdatedBy || null,
+        createdBy: alertData.createdBy || null,
+        createdAt: alertData.createdAt || null,
+        lastUpdatedAt: alertData.lastUpdatedAt || null,
+        state: alertData.state || null,
+        excludedDetail: alertData.excludedDetail || null,
         ...alertData,
       },
     };
@@ -392,6 +433,82 @@ export default function AlertDetailPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
+          {/* Infos Lead */}
+          <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-5">
+            <h2 className="font-medium text-gray-900 dark:text-gray-100 mb-4">Informations du lead</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {alert.data.phone && (
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-blue-50 dark:bg-blue-950 flex items-center justify-center">
+                    <Phone className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Téléphone</p>
+                    <p className="font-medium text-gray-900 dark:text-gray-100">{formatPhone(String(alert.data.phone))}</p>
+                  </div>
+                </div>
+              )}
+              {alert.data.lastAgent && (
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-purple-50 dark:bg-purple-950 flex items-center justify-center">
+                    <User className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Dernier agent</p>
+                    <p className="font-medium text-gray-900 dark:text-gray-100">{String(alert.data.lastAgent)}</p>
+                  </div>
+                </div>
+              )}
+              {alert.data.createdBy && (
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-green-50 dark:bg-green-950 flex items-center justify-center">
+                    <User className="h-4 w-4 text-green-600 dark:text-green-400" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Créé par</p>
+                    <p className="font-medium text-gray-900 dark:text-gray-100">{String(alert.data.createdBy)}</p>
+                  </div>
+                </div>
+              )}
+              {alert.data.createdAt && (
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-amber-50 dark:bg-amber-950 flex items-center justify-center">
+                    <Calendar className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Créé le</p>
+                    <p className="font-medium text-gray-900 dark:text-gray-100">{formatDate(String(alert.data.createdAt))}</p>
+                  </div>
+                </div>
+              )}
+              {alert.data.state && (
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-gray-50 dark:bg-gray-800 flex items-center justify-center">
+                    <AlertCircle className="h-4 w-4 text-gray-600 dark:text-gray-400" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">État</p>
+                    <p className="font-medium text-gray-900 dark:text-gray-100">
+                      {STATE_LABELS[String(alert.data.state)] || String(alert.data.state)}
+                    </p>
+                  </div>
+                </div>
+              )}
+              {alert.data.excludedDetail && (
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-red-50 dark:bg-red-950 flex items-center justify-center">
+                    <XCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Raison exclusion</p>
+                    <p className="font-medium text-gray-900 dark:text-gray-100">{String(alert.data.excludedDetail)}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Données de l'alerte */}
           <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-5">
             <h2 className="font-medium text-gray-900 dark:text-gray-100 mb-4">Données de l&apos;alerte</h2>
             <dl className="grid grid-cols-2 gap-4">
