@@ -395,34 +395,34 @@ export default function AlertDetailPage() {
           <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-5">
             <h2 className="font-medium text-gray-900 dark:text-gray-100 mb-4">Données de l&apos;alerte</h2>
             <dl className="grid grid-cols-2 gap-4">
-              {alert.data.priority !== undefined && (
+              {alert.data.priority !== undefined && alert.data.priority !== null && (
                 <div>
                   <dt className="text-sm text-gray-500 dark:text-gray-400">Priorité</dt>
-                  <dd className="text-lg font-medium text-gray-900 dark:text-gray-100">{alert.data.priority}</dd>
+                  <dd className="text-lg font-medium text-gray-900 dark:text-gray-100">{String(alert.data.priority)}</dd>
                 </div>
               )}
-              {alert.data.triesNumber !== undefined && (
+              {alert.data.triesNumber !== undefined && alert.data.triesNumber !== null && (
                 <div>
                   <dt className="text-sm text-gray-500 dark:text-gray-400">Nombre de tentatives</dt>
-                  <dd className="text-lg font-medium text-gray-900 dark:text-gray-100">{alert.data.triesNumber}</dd>
+                  <dd className="text-lg font-medium text-gray-900 dark:text-gray-100">{String(alert.data.triesNumber)}</dd>
                 </div>
               )}
-              {alert.data.hoursWithoutCall !== undefined && (
+              {alert.data.hoursWithoutCall !== undefined && alert.data.hoursWithoutCall !== null && (
                 <div>
                   <dt className="text-sm text-gray-500 dark:text-gray-400">Temps sans appel</dt>
-                  <dd className="text-lg font-medium text-gray-900 dark:text-gray-100">{alert.data.hoursWithoutCall}h</dd>
+                  <dd className="text-lg font-medium text-gray-900 dark:text-gray-100">{String(alert.data.hoursWithoutCall)}h</dd>
                 </div>
               )}
-              {alert.data.callDuration !== undefined && (
+              {alert.data.callDuration !== undefined && alert.data.callDuration !== null && (
                 <div>
                   <dt className="text-sm text-gray-500 dark:text-gray-400">Durée du dernier appel</dt>
-                  <dd className="text-lg font-medium text-gray-900 dark:text-gray-100">{alert.data.callDuration} sec</dd>
+                  <dd className="text-lg font-medium text-gray-900 dark:text-gray-100">{String(alert.data.callDuration)} sec</dd>
                 </div>
               )}
               {alert.data.closingCode && (
                 <div>
                   <dt className="text-sm text-gray-500 dark:text-gray-400">Code de clôture</dt>
-                  <dd className="text-lg font-medium text-gray-900 dark:text-gray-100">{alert.data.closingCode}</dd>
+                  <dd className="text-lg font-medium text-gray-900 dark:text-gray-100">{String(alert.data.closingCode)}</dd>
                 </div>
               )}
             </dl>
