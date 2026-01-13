@@ -1,83 +1,44 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/lib/supabase";
+import { Loader2 } from "lucide-react";
 
-// Données mockées pour différentes périodes
-const mockData = {
-  "7d": [
-    { day: "Lun", critical: 4, warning: 8 },
-    { day: "Mar", critical: 6, warning: 12 },
-    { day: "Mer", critical: 3, warning: 7 },
-    { day: "Jeu", critical: 8, warning: 15 },
-    { day: "Ven", critical: 5, warning: 9 },
-    { day: "Sam", critical: 2, warning: 4 },
-    { day: "Dim", critical: 3, warning: 6 },
-  ],
-  "15d": [
-    { day: "01/01", critical: 5, warning: 10 },
-    { day: "02/01", critical: 3, warning: 8 },
-    { day: "03/01", critical: 7, warning: 14 },
-    { day: "04/01", critical: 4, warning: 9 },
-    { day: "05/01", critical: 6, warning: 11 },
-    { day: "06/01", critical: 8, warning: 15 },
-    { day: "07/01", critical: 5, warning: 10 },
-    { day: "08/01", critical: 4, warning: 8 },
-    { day: "09/01", critical: 6, warning: 12 },
-    { day: "10/01", critical: 3, warning: 7 },
-    { day: "11/01", critical: 8, warning: 15 },
-    { day: "12/01", critical: 5, warning: 9 },
-    { day: "13/01", critical: 2, warning: 4 },
-    { day: "14/01", critical: 3, warning: 6 },
-    { day: "15/01", critical: 4, warning: 8 },
-  ],
-  "1m": [
-    { day: "Sem 1", critical: 25, warning: 48 },
-    { day: "Sem 2", critical: 32, warning: 61 },
-    { day: "Sem 3", critical: 28, warning: 52 },
-    { day: "Sem 4", critical: 21, warning: 45 },
-  ],
-  "3m": [
-    { day: "Oct", critical: 89, warning: 156 },
-    { day: "Nov", critical: 102, warning: 189 },
-    { day: "Déc", critical: 78, warning: 134 },
-  ],
-  "1y": [
-    { day: "Jan", critical: 95, warning: 180 },
-    { day: "Fév", critical: 88, warning: 165 },
-    { day: "Mar", critical: 102, warning: 195 },
-    { day: "Avr", critical: 79, warning: 148 },
-    { day: "Mai", critical: 85, warning: 160 },
-    { day: "Juin", critical: 92, warning: 175 },
-    { day: "Juil", critical: 68, warning: 125 },
-    { day: "Août", critical: 55, warning: 98 },
-    { day: "Sep", critical: 78, warning: 145 },
-    { day: "Oct", critical: 89, warning: 156 },
-    { day: "Nov", critical: 102, warning: 189 },
-    { day: "Déc", critical: 78, warning: 134 },
-  ],
+// Mapping des règles vers sévérité
+const RULES_SEVERITY: Record<string, "critical" | "warning" | "info"> = {
+  "00097670-06b9-406a-97cc-c8d138448eff": "critical", // Lead dormant
+  "23934576-a556-4035-8dc8-2d851a86e02e": "critical", // Rappel oublié
+  "59cb9b8e-6916-47f8-898c-c2e18c81f4a6": "warning",  // Unreachable suspect
+  "7caa90f2-9288-4c80-8d6a-6d3078c6a135": "warning",  // Clôture trop rapide
+  "c99b95b1-5dd6-48ed-b703-84df70e4eddb": "info",     // Acharnement
 };
 
+interface ChartDataPoint {
+  day: string;
+  critical: number;
+  warning: number;
+}
+
 const periods = [
-  { key: "7d", label: "7 jours" },
-  { key: "15d", label: "15 jours" },
-  { key: "1m", label: "1 mois" },
-  { key: "3m", label: "3 mois" },
-  { key: "1y", label: "1 an" },
+  { key: "7d", label: "7 jours", days: 7 },
+  { key: "15d", label: "15 jours", days: 15 },
+  { key: "1m", label: "1 mois", days: 30 },
+  { key: "3m", label: "3 mois", days: 90 },
 ] as const;
 
-type PeriodKey = keyof typeof mockData;
+type PeriodKey = "7d" | "15d" | "1m" | "3m";
 
 // Tooltip personnalisé
-function CustomTooltip({ active, payload, label }: any) {
+function CustomTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ color: string; dataKey: string; value: number }>; label?: string }) {
   if (!active || !payload || !payload.length) return null;
 
   return (
     <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3">
       <p className="font-medium text-gray-900 dark:text-gray-100 mb-2">{label}</p>
       <div className="space-y-1.5">
-        {payload.map((entry: any, index: number) => (
+        {payload.map((entry, index: number) => (
           <div key={index} className="flex items-center justify-between gap-4 text-sm">
             <div className="flex items-center gap-2">
               <span
@@ -98,15 +59,97 @@ function CustomTooltip({ active, payload, label }: any) {
 
 export function AlertsChart() {
   const [period, setPeriod] = useState<PeriodKey>("7d");
-  const chartData = mockData[period];
+  const [chartData, setChartData] = useState<ChartDataPoint[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [trend, setTrend] = useState(0);
 
-  // Calcul de la tendance
-  const totalThisperiod = chartData.reduce((sum, d) => sum + d.critical + d.warning, 0);
-  const totalLastPeriod = Math.round(totalThisperiod * 0.85);
-  const trend = Math.round(((totalThisperiod - totalLastPeriod) / totalLastPeriod) * 100);
-  const isUp = trend > 0;
+  useEffect(() => {
+    async function fetchChartData() {
+      setLoading(true);
+      
+      const periodConfig = periods.find(p => p.key === period);
+      const days = periodConfig?.days || 7;
+      
+      // Date de début
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - days);
+      startDate.setHours(0, 0, 0, 0);
+
+      // Date de début période précédente (pour le trend)
+      const prevStartDate = new Date();
+      prevStartDate.setDate(prevStartDate.getDate() - (days * 2));
+      prevStartDate.setHours(0, 0, 0, 0);
+
+      // Fetch alertes de la période
+      const { data: alerts } = await supabase
+        .from("alerts")
+        .select("rule_id, detected_at")
+        .gte("detected_at", startDate.toISOString())
+        .order("detected_at", { ascending: true });
+
+      // Fetch alertes période précédente (pour trend)
+      const { data: prevAlerts } = await supabase
+        .from("alerts")
+        .select("rule_id")
+        .gte("detected_at", prevStartDate.toISOString())
+        .lt("detected_at", startDate.toISOString());
+
+      // Grouper par jour
+      const dataByDay: Record<string, { critical: number; warning: number }> = {};
+      
+      // Initialiser tous les jours de la période
+      for (let i = days - 1; i >= 0; i--) {
+        const date = new Date();
+        date.setDate(date.getDate() - i);
+        const dayKey = formatDayKey(date, days);
+        dataByDay[dayKey] = { critical: 0, warning: 0 };
+      }
+
+      // Compter les alertes par jour et sévérité
+      (alerts || []).forEach((alert) => {
+        const date = new Date(alert.detected_at);
+        const dayKey = formatDayKey(date, days);
+        const severity = RULES_SEVERITY[alert.rule_id] || "info";
+        
+        if (dataByDay[dayKey]) {
+          if (severity === "critical") {
+            dataByDay[dayKey].critical++;
+          } else if (severity === "warning") {
+            dataByDay[dayKey].warning++;
+          }
+        }
+      });
+
+      // Convertir en array pour le chart
+      const chartDataArray: ChartDataPoint[] = Object.entries(dataByDay).map(([day, counts]) => ({
+        day,
+        critical: counts.critical,
+        warning: counts.warning,
+      }));
+
+      setChartData(chartDataArray);
+
+      // Calculer le trend
+      const currentTotal = (alerts || []).length;
+      const prevTotal = (prevAlerts || []).length;
+      
+      if (prevTotal > 0) {
+        const trendValue = Math.round(((currentTotal - prevTotal) / prevTotal) * 100);
+        setTrend(trendValue);
+      } else if (currentTotal > 0) {
+        setTrend(100);
+      } else {
+        setTrend(0);
+      }
+
+      setLoading(false);
+    }
+
+    fetchChartData();
+  }, [period]);
 
   const periodLabel = periods.find((p) => p.key === period)?.label || "";
+  const isUp = trend > 0;
 
   return (
     <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 shadow-sm">
@@ -138,51 +181,61 @@ export function AlertsChart() {
 
       {/* Chart */}
       <div className="p-5">
-        <div className="h-[200px] w-full">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart
-              data={chartData}
-              margin={{ left: 0, right: 0, top: 10, bottom: 0 }}
-            >
-              <CartesianGrid vertical={false} strokeDasharray="3 3" className="stroke-gray-200 dark:stroke-gray-700" />
-              <XAxis
-                dataKey="day"
-                tickLine={false}
-                axisLine={false}
-                tickMargin={8}
-                fontSize={12}
-                className="fill-gray-500 dark:fill-gray-400"
-              />
-              <YAxis
-                tickLine={false}
-                axisLine={false}
-                tickMargin={8}
-                fontSize={12}
-                className="fill-gray-500 dark:fill-gray-400"
-                width={35}
-              />
-              <Tooltip content={<CustomTooltip />} />
-              <Area
-                dataKey="warning"
-                type="monotone"
-                fill="#f59e0b"
-                fillOpacity={0.2}
-                stroke="#f59e0b"
-                strokeWidth={2}
-                stackId="a"
-              />
-              <Area
-                dataKey="critical"
-                type="monotone"
-                fill="#ef4444"
-                fillOpacity={0.3}
-                stroke="#ef4444"
-                strokeWidth={2}
-                stackId="a"
-              />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
+        {loading ? (
+          <div className="h-[200px] flex items-center justify-center">
+            <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+          </div>
+        ) : chartData.length === 0 ? (
+          <div className="h-[200px] flex items-center justify-center text-gray-500 dark:text-gray-400">
+            Aucune donnée pour cette période
+          </div>
+        ) : (
+          <div className="h-[200px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart
+                data={chartData}
+                margin={{ left: 0, right: 0, top: 10, bottom: 0 }}
+              >
+                <CartesianGrid vertical={false} strokeDasharray="3 3" className="stroke-gray-200 dark:stroke-gray-700" />
+                <XAxis
+                  dataKey="day"
+                  tickLine={false}
+                  axisLine={false}
+                  tickMargin={8}
+                  fontSize={12}
+                  className="fill-gray-500 dark:fill-gray-400"
+                />
+                <YAxis
+                  tickLine={false}
+                  axisLine={false}
+                  tickMargin={8}
+                  fontSize={12}
+                  className="fill-gray-500 dark:fill-gray-400"
+                  width={35}
+                />
+                <Tooltip content={<CustomTooltip />} />
+                <Area
+                  dataKey="warning"
+                  type="monotone"
+                  fill="#f59e0b"
+                  fillOpacity={0.2}
+                  stroke="#f59e0b"
+                  strokeWidth={2}
+                  stackId="a"
+                />
+                <Area
+                  dataKey="critical"
+                  type="monotone"
+                  fill="#ef4444"
+                  fillOpacity={0.3}
+                  stroke="#ef4444"
+                  strokeWidth={2}
+                  stackId="a"
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        )}
       </div>
 
       {/* Footer */}
@@ -199,10 +252,26 @@ export function AlertsChart() {
             </div>
           </div>
           <div className={`font-medium ${isUp ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"}`}>
-            {isUp ? "↑" : "↓"} {Math.abs(trend)}% vs période précédente
+            {trend === 0 ? "—" : (isUp ? "↑" : "↓")} {Math.abs(trend)}% vs période précédente
           </div>
         </div>
       </div>
     </div>
   );
+}
+
+// Helper pour formater les labels des jours
+function formatDayKey(date: Date, totalDays: number): string {
+  if (totalDays <= 7) {
+    // Jours de la semaine
+    const days = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
+    return days[date.getDay()];
+  } else if (totalDays <= 31) {
+    // Format DD/MM
+    return `${String(date.getDate()).padStart(2, "0")}/${String(date.getMonth() + 1).padStart(2, "0")}`;
+  } else {
+    // Format semaine ou mois
+    const weekNum = Math.ceil(date.getDate() / 7);
+    return `Sem ${weekNum}`;
+  }
 }
