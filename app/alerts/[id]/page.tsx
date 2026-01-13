@@ -33,6 +33,22 @@ interface HistoryEntry {
   performed_at: string;
 }
 
+interface AlertData {
+  hoursWithoutCall?: number;
+  priority?: number;
+  triesNumber?: number;
+  callDuration?: number;
+  closingCode?: string;
+  phone?: string;
+  lastAgent?: string;
+  createdBy?: string;
+  createdAt?: string;
+  lastUpdatedAt?: string;
+  state?: string;
+  excludedDetail?: string;
+  [key: string]: unknown;
+}
+
 // Mapping des règles
 const RULES_MAP: Record<string, { name: string; severity: Severity; description: string }> = {
   "00097670-06b9-406a-97cc-c8d138448eff": { 
@@ -149,7 +165,6 @@ function formatDate(dateString: string): string {
 
 function formatPhone(phone: string): string {
   if (!phone) return "";
-  // Format: 33187522709 → +33 1 87 52 27 09
   if (phone.startsWith("33")) {
     const digits = phone.slice(2);
     return `+33 ${digits.slice(0, 1)} ${digits.slice(1, 3)} ${digits.slice(3, 5)} ${digits.slice(5, 7)} ${digits.slice(7, 9)}`;
@@ -167,11 +182,15 @@ function getStatusColor(status: string): string {
   }
 }
 
+interface TransformedAlert extends Omit<Alert, 'data'> {
+  data: AlertData;
+}
+
 export default function AlertDetailPage() {
   const params = useParams();
   const alertId = params.id as string;
   
-  const [alert, setAlert] = useState<Alert | null>(null);
+  const [alert, setAlert] = useState<TransformedAlert | null>(null);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
@@ -213,7 +232,7 @@ export default function AlertDetailPage() {
     const now = new Date();
     const hoursWithoutCall = Math.floor((now.getTime() - createdAt.getTime()) / (1000 * 60 * 60));
 
-    const transformed: Alert = {
+    const transformed: TransformedAlert = {
       id: data.id,
       ruleId: data.rule_id,
       ruleName: ruleInfo.name,
@@ -228,15 +247,13 @@ export default function AlertDetailPage() {
         hoursWithoutCall,
         priority: alertData.priority,
         triesNumber: alertData.triesNumber,
-        // Nouvelles infos
-        phone: alertData.contactCardDisplayNumber || null,
-        lastAgent: alertData.lastUpdatedBy || null,
-        createdBy: alertData.createdBy || null,
-        createdAt: alertData.createdAt || null,
-        lastUpdatedAt: alertData.lastUpdatedAt || null,
-        state: alertData.state || null,
-        excludedDetail: alertData.excludedDetail || null,
-        ...alertData,
+        phone: alertData.contactCardDisplayNumber || undefined,
+        lastAgent: alertData.lastUpdatedBy || undefined,
+        createdBy: alertData.createdBy || undefined,
+        createdAt: alertData.createdAt || undefined,
+        lastUpdatedAt: alertData.lastUpdatedAt || undefined,
+        state: alertData.state || undefined,
+        excludedDetail: alertData.excludedDetail || undefined,
       },
     };
 
@@ -444,7 +461,7 @@ export default function AlertDetailPage() {
                   </div>
                   <div>
                     <p className="text-xs text-gray-500 dark:text-gray-400">Téléphone</p>
-                    <p className="font-medium text-gray-900 dark:text-gray-100">{formatPhone(String(alert.data.phone))}</p>
+                    <p className="font-medium text-gray-900 dark:text-gray-100">{formatPhone(alert.data.phone)}</p>
                   </div>
                 </div>
               )}
@@ -455,7 +472,7 @@ export default function AlertDetailPage() {
                   </div>
                   <div>
                     <p className="text-xs text-gray-500 dark:text-gray-400">Dernier agent</p>
-                    <p className="font-medium text-gray-900 dark:text-gray-100">{String(alert.data.lastAgent)}</p>
+                    <p className="font-medium text-gray-900 dark:text-gray-100">{alert.data.lastAgent}</p>
                   </div>
                 </div>
               )}
@@ -466,7 +483,7 @@ export default function AlertDetailPage() {
                   </div>
                   <div>
                     <p className="text-xs text-gray-500 dark:text-gray-400">Créé par</p>
-                    <p className="font-medium text-gray-900 dark:text-gray-100">{String(alert.data.createdBy)}</p>
+                    <p className="font-medium text-gray-900 dark:text-gray-100">{alert.data.createdBy}</p>
                   </div>
                 </div>
               )}
@@ -477,7 +494,7 @@ export default function AlertDetailPage() {
                   </div>
                   <div>
                     <p className="text-xs text-gray-500 dark:text-gray-400">Créé le</p>
-                    <p className="font-medium text-gray-900 dark:text-gray-100">{formatDate(String(alert.data.createdAt))}</p>
+                    <p className="font-medium text-gray-900 dark:text-gray-100">{formatDate(alert.data.createdAt)}</p>
                   </div>
                 </div>
               )}
@@ -489,7 +506,7 @@ export default function AlertDetailPage() {
                   <div>
                     <p className="text-xs text-gray-500 dark:text-gray-400">État</p>
                     <p className="font-medium text-gray-900 dark:text-gray-100">
-                      {STATE_LABELS[String(alert.data.state)] || String(alert.data.state)}
+                      {STATE_LABELS[alert.data.state] || alert.data.state}
                     </p>
                   </div>
                 </div>
@@ -501,7 +518,7 @@ export default function AlertDetailPage() {
                   </div>
                   <div>
                     <p className="text-xs text-gray-500 dark:text-gray-400">Raison exclusion</p>
-                    <p className="font-medium text-gray-900 dark:text-gray-100">{String(alert.data.excludedDetail)}</p>
+                    <p className="font-medium text-gray-900 dark:text-gray-100">{alert.data.excludedDetail}</p>
                   </div>
                 </div>
               )}
@@ -512,34 +529,34 @@ export default function AlertDetailPage() {
           <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-5">
             <h2 className="font-medium text-gray-900 dark:text-gray-100 mb-4">Données de l&apos;alerte</h2>
             <dl className="grid grid-cols-2 gap-4">
-              {alert.data.priority !== undefined && alert.data.priority !== null && (
+              {alert.data.priority !== undefined && (
                 <div>
                   <dt className="text-sm text-gray-500 dark:text-gray-400">Priorité</dt>
-                  <dd className="text-lg font-medium text-gray-900 dark:text-gray-100">{String(alert.data.priority)}</dd>
+                  <dd className="text-lg font-medium text-gray-900 dark:text-gray-100">{alert.data.priority}</dd>
                 </div>
               )}
-              {alert.data.triesNumber !== undefined && alert.data.triesNumber !== null && (
+              {alert.data.triesNumber !== undefined && (
                 <div>
                   <dt className="text-sm text-gray-500 dark:text-gray-400">Nombre de tentatives</dt>
-                  <dd className="text-lg font-medium text-gray-900 dark:text-gray-100">{String(alert.data.triesNumber)}</dd>
+                  <dd className="text-lg font-medium text-gray-900 dark:text-gray-100">{alert.data.triesNumber}</dd>
                 </div>
               )}
-              {alert.data.hoursWithoutCall !== undefined && alert.data.hoursWithoutCall !== null && (
+              {alert.data.hoursWithoutCall !== undefined && (
                 <div>
                   <dt className="text-sm text-gray-500 dark:text-gray-400">Temps sans appel</dt>
-                  <dd className="text-lg font-medium text-gray-900 dark:text-gray-100">{String(alert.data.hoursWithoutCall)}h</dd>
+                  <dd className="text-lg font-medium text-gray-900 dark:text-gray-100">{alert.data.hoursWithoutCall}h</dd>
                 </div>
               )}
-              {alert.data.callDuration !== undefined && alert.data.callDuration !== null && (
+              {alert.data.callDuration !== undefined && (
                 <div>
                   <dt className="text-sm text-gray-500 dark:text-gray-400">Durée du dernier appel</dt>
-                  <dd className="text-lg font-medium text-gray-900 dark:text-gray-100">{String(alert.data.callDuration)} sec</dd>
+                  <dd className="text-lg font-medium text-gray-900 dark:text-gray-100">{alert.data.callDuration} sec</dd>
                 </div>
               )}
               {alert.data.closingCode && (
                 <div>
                   <dt className="text-sm text-gray-500 dark:text-gray-400">Code de clôture</dt>
-                  <dd className="text-lg font-medium text-gray-900 dark:text-gray-100">{String(alert.data.closingCode)}</dd>
+                  <dd className="text-lg font-medium text-gray-900 dark:text-gray-100">{alert.data.closingCode}</dd>
                 </div>
               )}
             </dl>
