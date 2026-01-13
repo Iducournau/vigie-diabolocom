@@ -4,6 +4,7 @@ import "./globals.css";
 import { Sidebar } from "@/components/sidebar";
 import { ThemeProvider } from "@/components/theme-provider";
 import { FeedbackButton } from "@/components/feedback-button";
+import { Toaster } from "sonner";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
@@ -33,6 +34,7 @@ export default function RootLayout({
             </main>
           </div>
           <FeedbackButton />
+          <Toaster position="bottom-right" richColors />
         </ThemeProvider>
       </body>
     </html>

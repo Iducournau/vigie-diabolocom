@@ -1,9 +1,7 @@
 import Link from "next/link";
 import { Alert } from "@/lib/types";
-import { formatTimeAgo } from "@/lib/mock-data";
 import { SeverityBadge, StatusBadge } from "./alert-badge";
-import { Button } from "@/components/ui/button";
-import { AlertTriangle, Eye, X } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface AlertCardProps {
@@ -12,52 +10,66 @@ interface AlertCardProps {
   className?: string;
 }
 
+function formatTimeAgo(date: Date): string {
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMins / 60);
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffMins < 60) return `Il y a ${diffMins} min`;
+  if (diffHours < 24) return `Il y a ${diffHours}h`;
+  return `Il y a ${diffDays}j`;
+}
+
 export function AlertCard({ alert, compact = false, className }: AlertCardProps) {
   if (compact) {
     return (
-      <div
-        className={cn(
-          "flex items-center justify-between px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors",
-          className
-        )}
-      >
-        <div className="flex items-center gap-3 min-w-0">
-          <div
-            className={cn("w-2 h-2 rounded-full shrink-0", {
-              "bg-red-500": alert.severity === "critical",
-              "bg-amber-500": alert.severity === "warning",
-              "bg-blue-500": alert.severity === "info",
-            })}
-          />
-          <div className="min-w-0">
-            <p className="font-medium text-gray-900 dark:text-gray-100 text-sm">
-              {alert.ruleName}
-              <span className="font-normal text-gray-500 dark:text-gray-400"> — {alert.campaign}</span>
-            </p>
-            <p className="text-xs text-gray-500 dark:text-gray-500">
-              Lead #{alert.leadId} • {formatTimeAgo(alert.detectedAt)}
-            </p>
+      <Link href={`/alerts/${alert.id}`} className="block">
+        <div
+          className={cn(
+            "flex items-center justify-between px-4 py-3 transition-all duration-200 ease-out cursor-pointer",
+            "hover:-translate-y-1 hover:bg-gray-50 dark:hover:bg-gray-800/50",
+            className
+          )}
+        >
+          <div className="flex items-center gap-3 min-w-0">
+            <div
+              className={cn("w-2 h-2 rounded-full shrink-0", {
+                "bg-red-500": alert.severity === "critical",
+                "bg-amber-500": alert.severity === "warning",
+                "bg-blue-500": alert.severity === "info",
+              })}
+            />
+            <div className="min-w-0">
+              <p className="font-medium text-gray-900 dark:text-gray-100 text-sm">
+                {alert.ruleName}
+                <span className="font-normal text-gray-500 dark:text-gray-400"> — {alert.campaign}</span>
+              </p>
+              <p className="text-xs text-gray-500 dark:text-gray-500">
+                Lead #{alert.leadId} • {formatTimeAgo(alert.detectedAt)}
+              </p>
+            </div>
           </div>
         </div>
-        <div className="flex items-center gap-2 ml-4">
-          <Link href={`/alerts/${alert.id}`}>
-            <Button variant="ghost" size="sm" className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
-              <Eye className="h-4 w-4" />
-            </Button>
-          </Link>
-        </div>
-      </div>
+      </Link>
     );
   }
 
   return (
-    <div
-      className={cn(
-        "p-4 border border-gray-200 dark:border-gray-800 rounded-lg hover:border-gray-300 dark:hover:border-gray-700 transition-colors bg-white dark:bg-gray-900",
-        className
-      )}
-    >
-      <div className="flex items-start justify-between gap-4">
+    <Link href={`/alerts/${alert.id}`} className="block">
+      <div
+        className={cn(
+          "p-4 border rounded-lg transition-all duration-200 ease-out cursor-pointer bg-white dark:bg-gray-900",
+          "hover:-translate-y-1",
+          {
+            "border-gray-200 dark:border-gray-800 hover:border-red-300 dark:hover:border-red-800": alert.severity === "critical",
+            "border-gray-200 dark:border-gray-800 hover:border-amber-300 dark:hover:border-amber-800": alert.severity === "warning",
+            "border-gray-200 dark:border-gray-800 hover:border-blue-300 dark:hover:border-blue-800": alert.severity === "info",
+          },
+          className
+        )}
+      >
         <div className="flex items-start gap-3 min-w-0">
           <div className="mt-0.5">
             <AlertTriangle
@@ -68,7 +80,7 @@ export function AlertCard({ alert, compact = false, className }: AlertCardProps)
               })}
             />
           </div>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
               <h3 className="font-medium text-gray-900 dark:text-gray-100">{alert.ruleName}</h3>
               <SeverityBadge severity={alert.severity} />
@@ -109,20 +121,7 @@ export function AlertCard({ alert, compact = false, className }: AlertCardProps)
             </div>
           </div>
         </div>
-
-        <div className="flex items-center gap-2 shrink-0">
-          <Link href={`/alerts/${alert.id}`}>
-            <Button variant="outline" size="sm">
-              Voir
-            </Button>
-          </Link>
-          {alert.status === "new" && (
-            <Button variant="ghost" size="sm" className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
-              <X className="h-4 w-4" />
-            </Button>
-          )}
-        </div>
       </div>
-    </div>
+    </Link>
   );
 }

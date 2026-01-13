@@ -1,19 +1,115 @@
 "use client";
 
-import { rules, alerts } from "@/lib/mock-data";
+import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase";
 import { SeverityBadge } from "@/components/alert-badge";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { Settings2, Plus } from "lucide-react";
+import { Settings2, Plus, Loader2 } from "lucide-react";
+import { Severity } from "@/lib/types";
+
+// Types
+interface Rule {
+  id: string;
+  name: string;
+  description: string;
+  rule_type: string;
+  severity: Severity;
+  parameters: Record<string, number>;
+  is_active: boolean;
+  alert_count: number;
+}
+
+// Mapping des règles avec leurs paramètres et sévérité
+// (ces infos ne sont pas en DB, on les définit ici en V1)
+const RULES_CONFIG: Record<string, { severity: Severity; parameters: Record<string, number> }> = {
+  "00097670-06b9-406a-97cc-c8d138448eff": { 
+    severity: "critical", 
+    parameters: { hoursThreshold: 72 } 
+  },
+  "23934576-a556-4035-8dc8-2d851a86e02e": { 
+    severity: "critical", 
+    parameters: { hoursThreshold: 48 } 
+  },
+  "59cb9b8e-6916-47f8-898c-c2e18c81f4a6": { 
+    severity: "warning", 
+    parameters: { durationThreshold: 30 } 
+  },
+  "7caa90f2-9288-4c80-8d6a-6d3078c6a135": { 
+    severity: "warning", 
+    parameters: { durationThreshold: 10 } 
+  },
+  "c99b95b1-5dd6-48ed-b703-84df70e4eddb": { 
+    severity: "info", 
+    parameters: { callThreshold: 10 } 
+  },
+};
 
 export default function RulesPage() {
-  const alertCountByRule = rules.reduce(
-    (acc, rule) => {
-      acc[rule.id] = alerts.filter((a) => a.ruleId === rule.id).length;
-      return acc;
-    },
-    {} as Record<string, number>
-  );
+  const [rules, setRules] = useState<Rule[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchRules() {
+      setLoading(true);
+
+      // Récupérer les règles
+      const { data: rulesData, error: rulesError } = await supabase
+        .from("rules")
+        .select("*")
+        .order("name");
+
+      if (rulesError) {
+        console.error("Erreur rules:", rulesError);
+        setLoading(false);
+        return;
+      }
+
+      // Récupérer le nombre d'alertes par règle
+      const { data: alertCounts, error: alertError } = await supabase
+        .from("alerts")
+        .select("rule_id")
+        .eq("status", "open");
+
+      if (alertError) {
+        console.error("Erreur alerts:", alertError);
+      }
+
+      // Compter les alertes par rule_id
+      const countByRule: Record<string, number> = {};
+      (alertCounts || []).forEach((alert) => {
+        countByRule[alert.rule_id] = (countByRule[alert.rule_id] || 0) + 1;
+      });
+
+      // Transformer les données
+      const transformedRules: Rule[] = (rulesData || []).map((rule) => {
+        const config = RULES_CONFIG[rule.id] || { severity: "info", parameters: {} };
+        return {
+          id: rule.id,
+          name: rule.name,
+          description: rule.description,
+          rule_type: rule.rule_type,
+          severity: config.severity,
+          parameters: config.parameters,
+          is_active: true, // V1: toutes actives
+          alert_count: countByRule[rule.id] || 0,
+        };
+      });
+
+      setRules(transformedRules);
+      setLoading(false);
+    }
+
+    fetchRules();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -79,16 +175,16 @@ export default function RulesPage() {
                   <code className="text-xs bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-gray-600 dark:text-gray-400">
                     {Object.entries(rule.parameters)
                       .map(([k, v]) => `${k}: ${v}`)
-                      .join(", ")}
+                      .join(", ") || "—"}
                   </code>
                 </td>
                 <td className="px-5 py-4 text-center">
                   <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-gray-100 dark:bg-gray-800 text-xs font-medium text-gray-700 dark:text-gray-300">
-                    {alertCountByRule[rule.id] || 0}
+                    {rule.alert_count}
                   </span>
                 </td>
                 <td className="px-5 py-4 text-center">
-                  <Switch checked={rule.isActive} disabled />
+                  <Switch checked={rule.is_active} disabled />
                 </td>
                 <td className="px-5 py-4 text-right">
                   <Button variant="ghost" size="sm" disabled className="text-gray-400 dark:text-gray-500">
