@@ -20,28 +20,36 @@ interface Rule {
   alert_count: number;
 }
 
-// Mapping des règles avec leurs paramètres et sévérité
-// (ces infos ne sont pas en DB, on les définit ici en V1)
-const RULES_CONFIG: Record<string, { severity: Severity; parameters: Record<string, number> }> = {
+// Mapping des règles avec leurs paramètres, sévérité et descriptions techniques
+const RULES_CONFIG: Record<string, { 
+  severity: Severity; 
+  parameters: Record<string, number>;
+  description: string;
+}> = {
   "00097670-06b9-406a-97cc-c8d138448eff": { 
     severity: "critical", 
-    parameters: { hoursThreshold: 72 } 
+    parameters: { hoursThreshold: 72 },
+    description: "Lead priorité 1 sans appel depuis 72h+ (API Diabolocom, folder Admissions)"
   },
   "23934576-a556-4035-8dc8-2d851a86e02e": { 
     severity: "critical", 
-    parameters: { hoursThreshold: 48 } 
+    parameters: { hoursThreshold: 48 },
+    description: "Wrapup RDV/SUIVI/Rappel sans nouvel appel depuis 48h (MySQL call_logs_v3)"
   },
   "59cb9b8e-6916-47f8-898c-c2e18c81f4a6": { 
     severity: "warning", 
-    parameters: { durationThreshold: 30 } 
+    parameters: { durationThreshold: 30 },
+    description: "Wrapup Injoignable/Répondeur/Faux numéro avec talk_duration > 30s (MySQL)"
   },
   "7caa90f2-9288-4c80-8d6a-6d3078c6a135": { 
     severity: "warning", 
-    parameters: { durationThreshold: 10 } 
+    parameters: { durationThreshold: 10 },
+    description: "Wrapup Perdu/Pas intéressé/Raccroche avec talk_duration < 10s (MySQL)"
   },
   "c99b95b1-5dd6-48ed-b703-84df70e4eddb": { 
     severity: "info", 
-    parameters: { callThreshold: 10 } 
+    parameters: { callThreshold: 10 },
+    description: "Lead avec 10+ appels sur 7 jours sans clôture définitive (MySQL GROUP BY)"
   },
 };
 
@@ -83,11 +91,15 @@ export default function RulesPage() {
 
       // Transformer les données
       const transformedRules: Rule[] = (rulesData || []).map((rule) => {
-        const config = RULES_CONFIG[rule.id] || { severity: "info", parameters: {} };
+        const config = RULES_CONFIG[rule.id] || { 
+          severity: "info", 
+          parameters: {},
+          description: rule.description || "Règle personnalisée"
+        };
         return {
           id: rule.id,
           name: rule.name,
-          description: rule.description,
+          description: config.description,
           rule_type: rule.rule_type,
           severity: config.severity,
           parameters: config.parameters,
@@ -165,7 +177,7 @@ export default function RulesPage() {
                 <td className="px-5 py-4">
                   <div>
                     <p className="font-medium text-gray-900 dark:text-gray-100 text-sm">{rule.name}</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{rule.description}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 max-w-md">{rule.description}</p>
                   </div>
                 </td>
                 <td className="px-5 py-4">
@@ -205,10 +217,13 @@ export default function RulesPage() {
             Chaque règle analyse les données de Diabolocom (API + historique MySQL) pour détecter des anomalies.
           </p>
           <p>
-            <strong className="text-gray-700 dark:text-gray-300">Fréquence :</strong> Exécution toutes les 5 minutes via n8n.
+            <strong className="text-gray-700 dark:text-gray-300">Sources :</strong> API Diabolocom (leads en temps réel) + MySQL call_logs_v3 (historique appels)
           </p>
           <p>
-            <strong className="text-gray-700 dark:text-gray-300">Seuils :</strong> Paramètres configurables (durée, nombre d&apos;appels, etc.)
+            <strong className="text-gray-700 dark:text-gray-300">Fréquence :</strong> Exécution toutes les 5 minutes via n8n
+          </p>
+          <p>
+            <strong className="text-gray-700 dark:text-gray-300">Campagnes :</strong> 12 campagnes Admissions (IDs: 5612, 5927, 5920, 5622, 5611, 5621, 5580, 6064, 6051, 6046, 6050, 6082)
           </p>
         </div>
       </div>
