@@ -20,41 +20,20 @@ const RULES_MAP: Record<string, { name: string; severity: Severity }> = {
   "c99b95b1-5dd6-48ed-b703-84df70e4eddb": { name: "Acharnement", severity: "info" },
 };
 
-// Mapping des campagnes
+// Mapping des campagnes Admissions (12)
 const CAMPAIGNS_MAP: Record<string, string> = {
+  "5612": "Métiers Animaliers",
   "5927": "Electricien",
-  "3389": "CPF : Relances CPF",
-  "2602": "Coaching 2",
-  "2603": "Coaching 3",
-  "5659": "Coaching SKETCHUP",
-  "6083": "CA - Elec MIT MIS",
-  "5671": "Coaching CFA",
-  "4118": "Coaching 1 : nouveaux inscrits",
   "5920": "CAP MIS",
-  "6067": "CA - Excel et Formateur",
-  "6082": "CA - Mode Déco",
+  "5622": "Campagne Nutritionniste",
+  "5611": "Campagne Mode",
+  "5621": "Décorateur Intérieur",
+  "5580": "Campagne AEPE",
   "6064": "CA - Titres Professionnels",
-  "6050": "CA - Céramiste Fleuriste",
   "6051": "CA - Métiers de la Beauté",
   "6046": "CA - Métiers de Bouche",
-  "3148": "Campagne A",
-  "5571": "Test - Conseiller Fleuriste2",
-  "6016": "CRE : leads autonomes",
-  "5582": "CRE",
-  "5921": "CAP MIT",
-  "5611": "Campagne Mode",
-  "5622": "Campagne Nutritionniste",
-  "5621": "Décorateur Intérieur",
-  "5612": "Métiers Animaliers",
-  "5580": "Campagne AEPE",
-  "5617": "Admin apprentissage",
-  "5600": "Tiers Financement",
-  "5520": "Recouvrement",
-  "5534": "Recouvrement v2 test",
-  "5667": "Resiliation",
-  "3512": "CONTENTIEUX",
-  "3511": "COMPTA",
-  "3510": "ACCORD NON RESPECTÉ",
+  "6050": "CA - Céramiste Fleuriste",
+  "6082": "CA - Mode Déco",
 };
 
 function getCampaignName(campaignId: string): string {
@@ -159,6 +138,14 @@ export default function AlertsPage() {
         }
       }
 
+      // Filtre par sévérité (via rule_id)
+if (severityFilter !== "all") {
+  const ruleIds = Object.entries(RULES_MAP)
+    .filter(([, rule]) => rule.severity === severityFilter)
+    .map(([id]) => id);
+  query = query.in("rule_id", ruleIds);
+}
+
       // Pagination
       const from = (currentPage - 1) * perPage;
       const to = from + perPage - 1;
@@ -179,18 +166,14 @@ export default function AlertsPage() {
     }
 
     fetchAlerts();
-  }, [currentPage, perPage, statusFilter, campaignFilter]);
+ }, [currentPage, perPage, statusFilter, campaignFilter, severityFilter]);
 
   // Reset page quand les filtres changent
   useEffect(() => {
     setCurrentPage(1);
   }, [statusFilter, campaignFilter, severityFilter]);
 
-  // Filtrer par severity côté client
-  const filteredAlerts = alerts.filter((alert) => {
-    if (severityFilter !== "all" && alert.severity !== severityFilter) return false;
-    return true;
-  });
+ const filteredAlerts = alerts;
 
   // Campagnes pour le select
   const campaigns = Object.values(CAMPAIGNS_MAP).sort();

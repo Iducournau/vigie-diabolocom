@@ -64,7 +64,7 @@ const RULES_MAP: Record<string, { name: string; severity: Severity; description:
   "59cb9b8e-6916-47f8-898c-c2e18c81f4a6": { 
     name: "Unreachable suspect", 
     severity: "warning",
-    description: "Lead marqué injoignable avec peu de tentatives"
+    description: "Clôture Répondeur mais avec une durée de conversation > 30s"
   },
   "7caa90f2-9288-4c80-8d6a-6d3078c6a135": { 
     name: "Clôture trop rapide", 
@@ -74,7 +74,7 @@ const RULES_MAP: Record<string, { name: string; severity: Severity; description:
   "c99b95b1-5dd6-48ed-b703-84df70e4eddb": { 
     name: "Acharnement", 
     severity: "info",
-    description: "Trop d'appels sur un même lead en peu de temps"
+    description: " Lead appelé plus de 10 fois en 7 jours."
   },
 };
 
