@@ -19,6 +19,7 @@ interface ChartDataPoint {
   day: string;
   critical: number;
   warning: number;
+  info: number;
 }
 
 const periods = [
@@ -34,6 +35,12 @@ type PeriodKey = "7d" | "15d" | "1m" | "3m";
 function CustomTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ color: string; dataKey: string; value: number }>; label?: string }) {
   if (!active || !payload || !payload.length) return null;
 
+  const labels: Record<string, string> = {
+    critical: "Critiques",
+    warning: "Attention",
+    info: "Info",
+  };
+
   return (
     <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3">
       <p className="font-medium text-gray-900 dark:text-gray-100 mb-2">{label}</p>
@@ -46,7 +53,7 @@ function CustomTooltip({ active, payload, label }: { active?: boolean; payload?:
                 style={{ backgroundColor: entry.color }}
               />
               <span className="text-gray-600 dark:text-gray-400">
-                {entry.dataKey === "critical" ? "Critiques" : "Attention"}
+                {labels[entry.dataKey] || entry.dataKey}
               </span>
             </div>
             <span className="font-medium text-gray-900 dark:text-gray-100">{entry.value}</span>
@@ -95,14 +102,14 @@ export function AlertsChart() {
         .lt("detected_at", startDate.toISOString());
 
       // Grouper par jour
-      const dataByDay: Record<string, { critical: number; warning: number }> = {};
+      const dataByDay: Record<string, { critical: number; warning: number; info: number }> = {};
       
       // Initialiser tous les jours de la période
       for (let i = days - 1; i >= 0; i--) {
         const date = new Date();
         date.setDate(date.getDate() - i);
         const dayKey = formatDayKey(date, days);
-        dataByDay[dayKey] = { critical: 0, warning: 0 };
+        dataByDay[dayKey] = { critical: 0, warning: 0, info: 0 };
       }
 
       // Compter les alertes par jour et sévérité
@@ -116,6 +123,8 @@ export function AlertsChart() {
             dataByDay[dayKey].critical++;
           } else if (severity === "warning") {
             dataByDay[dayKey].warning++;
+          } else {
+            dataByDay[dayKey].info++;
           }
         }
       });
@@ -125,6 +134,7 @@ export function AlertsChart() {
         day,
         critical: counts.critical,
         warning: counts.warning,
+        info: counts.info,
       }));
 
       setChartData(chartDataArray);
@@ -215,6 +225,15 @@ export function AlertsChart() {
                 />
                 <Tooltip content={<CustomTooltip />} />
                 <Area
+                  dataKey="info"
+                  type="monotone"
+                  fill="#3b82f6"
+                  fillOpacity={0.2}
+                  stroke="#3b82f6"
+                  strokeWidth={2}
+                  stackId="a"
+                />
+                <Area
                   dataKey="warning"
                   type="monotone"
                   fill="#f59e0b"
@@ -250,6 +269,10 @@ export function AlertsChart() {
               <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
               <span className="text-gray-600 dark:text-gray-400">Attention</span>
             </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-blue-500"></span>
+              <span className="text-gray-600 dark:text-gray-400">Info</span>
+            </div>
           </div>
           <div className={`font-medium ${isUp ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"}`}>
             {trend === 0 ? "—" : (isUp ? "↑" : "↓")} {Math.abs(trend)}% vs période précédente
@@ -263,14 +286,11 @@ export function AlertsChart() {
 // Helper pour formater les labels des jours
 function formatDayKey(date: Date, totalDays: number): string {
   if (totalDays <= 7) {
-    // Jours de la semaine
     const days = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
     return days[date.getDay()];
   } else if (totalDays <= 31) {
-    // Format DD/MM
     return `${String(date.getDate()).padStart(2, "0")}/${String(date.getMonth() + 1).padStart(2, "0")}`;
   } else {
-    // Format semaine ou mois
     const weekNum = Math.ceil(date.getDate() / 7);
     return `Sem ${weekNum}`;
   }

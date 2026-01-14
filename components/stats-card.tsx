@@ -5,7 +5,7 @@ interface StatsCardProps {
   title: string;
   value: number;
   icon: LucideIcon;
-  variant: "critical" | "warning" | "info" | "success";
+  variant: "critical" | "warning" | "info" | "success" | "default";
   className?: string;
 }
 
@@ -34,6 +34,12 @@ export function StatsCard({ title, value, icon: Icon, variant, className }: Stat
       border: "border-emerald-100 dark:border-emerald-900",
       icon: "text-emerald-500 bg-emerald-100 dark:bg-emerald-900/50",
       value: "text-emerald-700 dark:text-emerald-400",
+    },
+    default: {
+      bg: "bg-gray-50 dark:bg-gray-900",
+      border: "border-gray-200 dark:border-gray-800",
+      icon: "text-gray-500 bg-gray-100 dark:bg-gray-800",
+      value: "text-gray-900 dark:text-gray-100",
     },
   };
 

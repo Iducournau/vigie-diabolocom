@@ -1,14 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertTriangle, AlertCircle, Info, CheckCircle2, RefreshCw, Loader2 } from "lucide-react";
+import { AlertTriangle, AlertCircle, Info, CheckCircle2, RefreshCw, Loader2, ArrowUpDown } from "lucide-react";
 import { StatsCard } from "@/components/stats-card";
-import { AlertCard } from "@/components/alert-card";
 import { AlertsChart } from "@/components/alerts-chart";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
-import { Alert, Severity, AlertStatus } from "@/lib/types";
+import { Severity, AlertStatus } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
 // Mapping des règles
 const RULES_MAP: Record<string, { name: string; severity: Severity }> = {
@@ -19,41 +19,20 @@ const RULES_MAP: Record<string, { name: string; severity: Severity }> = {
   "c99b95b1-5dd6-48ed-b703-84df70e4eddb": { name: "Acharnement", severity: "info" },
 };
 
-// Mapping des campagnes
+// Mapping des campagnes Admissions (12)
 const CAMPAIGNS_MAP: Record<string, string> = {
+  "5612": "Métiers Animaliers",
   "5927": "Electricien",
-  "3389": "CPF : Relances CPF",
-  "2602": "Coaching 2",
-  "2603": "Coaching 3",
-  "5659": "Coaching SKETCHUP",
-  "6083": "CA - Elec MIT MIS",
-  "5671": "Coaching CFA",
-  "4118": "Coaching 1 : nouveaux inscrits",
   "5920": "CAP MIS",
-  "6067": "CA - Excel et Formateur",
-  "6082": "CA - Mode Déco",
+  "5622": "Campagne Nutritionniste",
+  "5611": "Campagne Mode",
+  "5621": "Décorateur Intérieur",
+  "5580": "Campagne AEPE",
   "6064": "CA - Titres Professionnels",
-  "6050": "CA - Céramiste Fleuriste",
   "6051": "CA - Métiers de la Beauté",
   "6046": "CA - Métiers de Bouche",
-  "3148": "Campagne A",
-  "5571": "Test - Conseiller Fleuriste2",
-  "6016": "CRE : leads autonomes",
-  "5582": "CRE",
-  "5921": "CAP MIT",
-  "5611": "Campagne Mode",
-  "5622": "Campagne Nutritionniste",
-  "5621": "Décorateur Intérieur",
-  "5612": "Métiers Animaliers",
-  "5580": "Campagne AEPE",
-  "5617": "Admin apprentissage",
-  "5600": "Tiers Financement",
-  "5520": "Recouvrement",
-  "5534": "Recouvrement v2 test",
-  "5667": "Resiliation",
-  "3512": "CONTENTIEUX",
-  "3511": "COMPTA",
-  "3510": "ACCORD NON RESPECTÉ",
+  "6050": "CA - Céramiste Fleuriste",
+  "6082": "CA - Mode Déco",
 };
 
 function getCampaignName(campaignId: string): string {
@@ -78,25 +57,44 @@ function formatTimeAgo(date: Date): string {
 }
 
 interface DashboardStats {
+  total: number;
   critical: number;
   warning: number;
   info: number;
   resolved: number;
 }
 
+interface AlertRow {
+  id: string;
+  ruleId: string;
+  ruleName: string;
+  severity: Severity;
+  status: AlertStatus;
+  leadId: string;
+  campaign: string;
+  campaignId: string;
+  detectedAt: Date;
+  tryNumber?: number;
+  talkDuration?: number;
+  callDuration?: number;
+}
+
 export default function DashboardPage() {
-  const [stats, setStats] = useState<DashboardStats>({ critical: 0, warning: 0, info: 0, resolved: 0 });
-  const [criticalAlerts, setCriticalAlerts] = useState<Alert[]>([]);
-  const [recentActivity, setRecentActivity] = useState<Alert[]>([]);
+  const [stats, setStats] = useState<DashboardStats>({ total: 0, critical: 0, warning: 0, info: 0, resolved: 0 });
+  const [criticalAlerts, setCriticalAlerts] = useState<AlertRow[]>([]);
+  const [recentActivity, setRecentActivity] = useState<AlertRow[]>([]);
+  const [alertsTable, setAlertsTable] = useState<AlertRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [lastSync, setLastSync] = useState<Date | null>(null);
+  const [sortField, setSortField] = useState<string>("detectedAt");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
 
   async function fetchDashboardData() {
-    // Fetch stats par sévérité (alertes ouvertes)
+    // Fetch toutes les alertes ouvertes pour les stats
     const { data: openAlerts } = await supabase
       .from("alerts")
-      .select("rule_id, status")
+      .select("*")
       .in("status", ["open", "acknowledged"]);
 
     // Compter par sévérité
@@ -110,6 +108,8 @@ export default function DashboardPage() {
       }
     });
 
+    const total = critical + warning + info;
+
     // Compter résolues (dernières 24h)
     const yesterday = new Date();
     yesterday.setHours(yesterday.getHours() - 24);
@@ -121,69 +121,72 @@ export default function DashboardPage() {
       .gte("resolved_at", yesterday.toISOString());
 
     setStats({
+      total,
       critical,
       warning,
       info,
       resolved: resolvedCount || 0,
     });
 
-    // Fetch alertes critiques (pour la liste)
+    // Fetch alertes critiques
+    const criticalRuleIds = Object.entries(RULES_MAP)
+      .filter(([, rule]) => rule.severity === "critical")
+      .map(([id]) => id);
+
     const { data: criticalData } = await supabase
       .from("alerts")
       .select("*")
+      .in("rule_id", criticalRuleIds)
       .in("status", ["open", "acknowledged"])
       .order("detected_at", { ascending: false })
-      .limit(10);
+      .limit(5);
 
-    const transformedCritical: Alert[] = (criticalData || [])
-      .map((data) => {
-        const ruleInfo = RULES_MAP[data.rule_id] || { name: "Règle inconnue", severity: "info" as Severity };
-        const alertData = typeof data.alert_data === "string" ? JSON.parse(data.alert_data) : data.alert_data || {};
-        
-        return {
-          id: data.id,
-          ruleId: data.rule_id,
-          ruleName: ruleInfo.name,
-          severity: ruleInfo.severity,
-          status: mapStatus(data.status),
-          leadId: data.lead_id,
-          campaign: getCampaignName(data.campaign),
-          detectedAt: new Date(data.detected_at),
-          data: alertData,
-        };
-      })
-      .filter((a) => a.severity === "critical");
-
+    const transformedCritical: AlertRow[] = (criticalData || []).map(transformAlertRow);
     setCriticalAlerts(transformedCritical);
 
-    // Fetch activité récente (dernières alertes créées/résolues)
+    // Fetch activité récente
     const { data: recentData } = await supabase
       .from("alerts")
       .select("*")
       .order("detected_at", { ascending: false })
       .limit(6);
 
-    const transformedRecent: Alert[] = (recentData || []).map((data) => {
-      const ruleInfo = RULES_MAP[data.rule_id] || { name: "Règle inconnue", severity: "info" as Severity };
-      const alertData = typeof data.alert_data === "string" ? JSON.parse(data.alert_data) : data.alert_data || {};
-      
-      return {
-        id: data.id,
-        ruleId: data.rule_id,
-        ruleName: ruleInfo.name,
-        severity: ruleInfo.severity,
-        status: mapStatus(data.status),
-        leadId: data.lead_id,
-        campaign: getCampaignName(data.campaign),
-        detectedAt: new Date(data.detected_at),
-        data: alertData,
-      };
-    });
-
+    const transformedRecent: AlertRow[] = (recentData || []).map(transformAlertRow);
     setRecentActivity(transformedRecent);
+
+    // Fetch pour le tableau (50 dernières)
+    const { data: tableData } = await supabase
+      .from("alerts")
+      .select("*")
+      .order("detected_at", { ascending: false })
+      .limit(50);
+
+    const transformedTable: AlertRow[] = (tableData || []).map(transformAlertRow);
+    setAlertsTable(transformedTable);
+
     setLastSync(new Date());
     setLoading(false);
     setRefreshing(false);
+  }
+
+  function transformAlertRow(data: any): AlertRow {
+    const ruleInfo = RULES_MAP[data.rule_id] || { name: "Règle inconnue", severity: "info" as Severity };
+    const alertData = typeof data.alert_data === "string" ? JSON.parse(data.alert_data) : data.alert_data || {};
+    
+    return {
+      id: data.id,
+      ruleId: data.rule_id,
+      ruleName: ruleInfo.name,
+      severity: ruleInfo.severity,
+      status: mapStatus(data.status),
+      leadId: data.lead_id,
+      campaign: getCampaignName(data.campaign),
+      campaignId: data.campaign,
+      detectedAt: new Date(data.detected_at),
+      tryNumber: alertData.triesNumber || alertData.try_number || alertData.call_count,
+      talkDuration: alertData.talk_duration || alertData.talkDuration,
+      callDuration: alertData.call_duration || alertData.callDuration,
+    };
   }
 
   useEffect(() => {
@@ -193,6 +196,48 @@ export default function DashboardPage() {
   async function handleRefresh() {
     setRefreshing(true);
     await fetchDashboardData();
+  }
+
+  // Tri du tableau
+  const sortedAlerts = [...alertsTable].sort((a, b) => {
+    let aVal: any, bVal: any;
+    
+    switch (sortField) {
+      case "detectedAt":
+        aVal = a.detectedAt.getTime();
+        bVal = b.detectedAt.getTime();
+        break;
+      case "severity":
+        const severityOrder = { critical: 0, warning: 1, info: 2 };
+        aVal = severityOrder[a.severity];
+        bVal = severityOrder[b.severity];
+        break;
+      case "campaign":
+        aVal = a.campaign;
+        bVal = b.campaign;
+        break;
+      case "ruleName":
+        aVal = a.ruleName;
+        bVal = b.ruleName;
+        break;
+      default:
+        aVal = a.detectedAt.getTime();
+        bVal = b.detectedAt.getTime();
+    }
+
+    if (sortOrder === "asc") {
+      return aVal > bVal ? 1 : -1;
+    }
+    return aVal < bVal ? 1 : -1;
+  });
+
+  function handleSort(field: string) {
+    if (sortField === field) {
+      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+    } else {
+      setSortField(field);
+      setSortOrder("desc");
+    }
   }
 
   if (loading) {
@@ -210,7 +255,7 @@ export default function DashboardPage() {
         <div>
           <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">Dashboard</h1>
           <p className="text-gray-500 dark:text-gray-400 mt-1 text-sm">
-            Surveillance des anomalies en temps réel
+            Surveillance des anomalies en temps réel • <span className="font-medium">{stats.total} alertes actives</span>
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -228,7 +273,13 @@ export default function DashboardPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+        <StatsCard
+          title="Total actives"
+          value={stats.total}
+          icon={AlertTriangle}
+          variant="default"
+        />
         <StatsCard
           title="Critiques"
           value={stats.critical}
@@ -267,10 +318,10 @@ export default function DashboardPage() {
               <span className="w-2 h-2 rounded-full bg-red-500"></span>
               Alertes critiques
               <span className="text-sm font-normal text-gray-500 dark:text-gray-400">
-                ({criticalAlerts.length})
+                ({stats.critical})
               </span>
             </h2>
-            <Link href="/alerts?status=new">
+            <Link href="/alerts?severity=critical">
               <Button variant="ghost" size="sm" className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300">
                 Voir tout →
               </Button>
@@ -278,11 +329,28 @@ export default function DashboardPage() {
           </div>
           <div className="divide-y divide-gray-100 dark:divide-gray-800">
             {criticalAlerts.length > 0 ? (
-              criticalAlerts
-                .slice(0, 5)
-                .map((alert) => (
-                  <AlertCard key={alert.id} alert={alert} compact />
-                ))
+              criticalAlerts.map((alert) => (
+                <Link key={alert.id} href={`/alerts/${alert.id}`}>
+                  <div className="px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <span className="w-2 h-2 rounded-full bg-red-500"></span>
+                        <div>
+                          <p className="font-medium text-gray-900 dark:text-gray-100">
+                            {alert.ruleName}
+                          </p>
+                          <p className="text-sm text-gray-500 dark:text-gray-400">
+                            Lead #{alert.leadId} • {alert.campaign}
+                          </p>
+                        </div>
+                      </div>
+                      <span className="text-xs text-gray-400 dark:text-gray-500">
+                        {formatTimeAgo(alert.detectedAt)}
+                      </span>
+                    </div>
+                  </div>
+                </Link>
+              ))
             ) : (
               <div className="p-8 text-center text-gray-500 dark:text-gray-400">
                 <CheckCircle2 className="h-10 w-10 mx-auto text-emerald-500 mb-3" />
@@ -309,18 +377,19 @@ export default function DashboardPage() {
                 <Link key={alert.id} href={`/alerts/${alert.id}`}>
                   <div className="flex items-start gap-3 text-sm hover:bg-gray-50 dark:hover:bg-gray-800 -mx-2 px-2 py-1.5 rounded-md transition-colors">
                     <div
-                      className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${
-                        alert.severity === "critical"
-                          ? "bg-red-500"
-                          : alert.severity === "warning"
-                          ? "bg-amber-500"
-                          : "bg-blue-500"
-                      }`}
+                      className={cn(
+                        "w-2 h-2 rounded-full mt-1.5 shrink-0",
+                        alert.severity === "critical" ? "bg-red-500" :
+                        alert.severity === "warning" ? "bg-amber-500" : "bg-blue-500"
+                      )}
                     />
                     <div className="flex-1 min-w-0">
                       <p className="text-gray-700 dark:text-gray-300 truncate">
                         {alert.ruleName}
                         <span className="text-gray-400 dark:text-gray-500"> • Lead #{alert.leadId}</span>
+                      </p>
+                      <p className="text-gray-500 dark:text-gray-400 text-xs truncate">
+                        {alert.campaign}
                       </p>
                       <p className="text-gray-400 dark:text-gray-500 text-xs">
                         {formatTimeAgo(alert.detectedAt)}
@@ -335,6 +404,125 @@ export default function DashboardPage() {
               </p>
             )}
           </div>
+        </div>
+      </div>
+
+      {/* Tableau détaillé */}
+      <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 shadow-sm">
+        <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-800">
+          <h2 className="font-medium text-gray-900 dark:text-gray-100">Détail des alertes</h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400">50 dernières alertes</p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 dark:bg-gray-800">
+              <tr>
+                <th 
+                  className="px-4 py-3 text-left font-medium text-gray-500 dark:text-gray-400 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
+                  onClick={() => handleSort("severity")}
+                >
+                  <div className="flex items-center gap-1">
+                    Sévérité
+                    <ArrowUpDown className="h-3 w-3" />
+                  </div>
+                </th>
+                <th 
+                  className="px-4 py-3 text-left font-medium text-gray-500 dark:text-gray-400 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
+                  onClick={() => handleSort("ruleName")}
+                >
+                  <div className="flex items-center gap-1">
+                    Type d'alerte
+                    <ArrowUpDown className="h-3 w-3" />
+                  </div>
+                </th>
+                <th className="px-4 py-3 text-left font-medium text-gray-500 dark:text-gray-400">
+                  Lead ID
+                </th>
+                <th className="px-4 py-3 text-left font-medium text-gray-500 dark:text-gray-400">
+                  Status
+                </th>
+                <th 
+                  className="px-4 py-3 text-left font-medium text-gray-500 dark:text-gray-400 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
+                  onClick={() => handleSort("campaign")}
+                >
+                  <div className="flex items-center gap-1">
+                    Campagne
+                    <ArrowUpDown className="h-3 w-3" />
+                  </div>
+                </th>
+                <th className="px-4 py-3 text-left font-medium text-gray-500 dark:text-gray-400">
+                  Try #
+                </th>
+                <th className="px-4 py-3 text-left font-medium text-gray-500 dark:text-gray-400">
+                  Talk (s)
+                </th>
+                <th 
+                  className="px-4 py-3 text-left font-medium text-gray-500 dark:text-gray-400 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
+                  onClick={() => handleSort("detectedAt")}
+                >
+                  <div className="flex items-center gap-1">
+                    Date
+                    <ArrowUpDown className="h-3 w-3" />
+                  </div>
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+              {sortedAlerts.map((alert) => (
+                <tr key={alert.id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                  <td className="px-4 py-3">
+                    <span className={cn(
+                      "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium",
+                      alert.severity === "critical" ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" :
+                      alert.severity === "warning" ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" :
+                      "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+                    )}>
+                      <span className={cn(
+                        "w-1.5 h-1.5 rounded-full",
+                        alert.severity === "critical" ? "bg-red-500" :
+                        alert.severity === "warning" ? "bg-amber-500" : "bg-blue-500"
+                      )}></span>
+                      {alert.severity === "critical" ? "Critique" : 
+                       alert.severity === "warning" ? "Attention" : "Info"}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-gray-900 dark:text-gray-100">
+                    <Link href={`/alerts/${alert.id}`} className="hover:underline">
+                      {alert.ruleName}
+                    </Link>
+                  </td>
+                  <td className="px-4 py-3 text-gray-600 dark:text-gray-400 font-mono text-xs">
+                    #{alert.leadId}
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className={cn(
+                      "px-2 py-0.5 rounded text-xs",
+                      alert.status === "new" ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" :
+                      alert.status === "acknowledged" ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" :
+                      alert.status === "resolved" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" :
+                      "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400"
+                    )}>
+                      {alert.status === "new" ? "Nouvelle" :
+                       alert.status === "acknowledged" ? "En cours" :
+                       alert.status === "resolved" ? "Résolue" : "Ignorée"}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-gray-600 dark:text-gray-400 text-xs">
+                    {alert.campaign}
+                  </td>
+                  <td className="px-4 py-3 text-gray-600 dark:text-gray-400 text-center">
+                    {alert.tryNumber || "-"}
+                  </td>
+                  <td className="px-4 py-3 text-gray-600 dark:text-gray-400 text-center">
+                    {alert.talkDuration || "-"}
+                  </td>
+                  <td className="px-4 py-3 text-gray-500 dark:text-gray-400 text-xs">
+                    {alert.detectedAt.toLocaleDateString("fr-FR")} {alert.detectedAt.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
