@@ -248,7 +248,7 @@ export default function RulesPage() {
             <strong className="text-gray-700 dark:text-gray-300">Sources :</strong> API Diabolocom (leads en temps réel) + MySQL call_logs_v3 (historique appels)
           </p>
           <p>
-            <strong className="text-gray-700 dark:text-gray-300">Fréquence :</strong> Exécution toutes les 5 minutes via n8n
+            <strong className="text-gray-700 dark:text-gray-300">Fréquence :</strong> Déclenchement manuel.
           </p>
           <p>
             <strong className="text-gray-700 dark:text-gray-300">Campagnes :</strong> 12 campagnes Admissions (IDs: 5612, 5927, 5920, 5622, 5611, 5621, 5580, 6064, 6051, 6046, 6050, 6082)
