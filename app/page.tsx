@@ -17,6 +17,10 @@ const RULES_MAP: Record<string, { name: string; severity: Severity }> = {
   "59cb9b8e-6916-47f8-898c-c2e18c81f4a6": { name: "Unreachable suspect", severity: "warning" },
   "7caa90f2-9288-4c80-8d6a-6d3078c6a135": { name: "Clôture trop rapide", severity: "warning" },
   "c99b95b1-5dd6-48ed-b703-84df70e4eddb": { name: "Acharnement", severity: "info" },
+  // Nouvelles règles Retry (RDV programmé dépassé)
+  "a1b2c3d4-1111-4000-8000-000000000001": { name: "Retry en retard (léger)", severity: "info" },
+  "a1b2c3d4-2222-4000-8000-000000000002": { name: "Retry en retard (modéré)", severity: "warning" },
+  "a1b2c3d4-3333-4000-8000-000000000003": { name: "Retry en retard (critique)", severity: "critical" },
 };
 
 // Mapping des campagnes Admissions (12)

@@ -13,6 +13,10 @@ const RULES_SEVERITY: Record<string, "critical" | "warning" | "info"> = {
   "59cb9b8e-6916-47f8-898c-c2e18c81f4a6": "warning",  // Unreachable suspect
   "7caa90f2-9288-4c80-8d6a-6d3078c6a135": "warning",  // Clôture trop rapide
   "c99b95b1-5dd6-48ed-b703-84df70e4eddb": "info",     // Acharnement
+  // Nouvelles règles Retry
+  "a1b2c3d4-1111-4000-8000-000000000001": "info",     // Retry en retard (léger)
+  "a1b2c3d4-2222-4000-8000-000000000002": "warning",  // Retry en retard (modéré)
+  "a1b2c3d4-3333-4000-8000-000000000003": "critical", // Retry en retard (critique)
 };
 
 interface ChartDataPoint {
