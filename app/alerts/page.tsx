@@ -3,7 +3,6 @@
 import { useEffect, useState, useMemo } from "react";
 import {
   ColumnDef,
-  ColumnFiltersState,
   SortingState,
   VisibilityState,
   flexRender,
@@ -14,30 +13,61 @@ import {
   useReactTable,
 } from "@tanstack/react-table";
 import {
-  ArrowUpDown,
-  ChevronDown,
-  Search,
+  ArrowDown,
+  ArrowRight,
+  ArrowUp,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  ChevronsUpDown,
   X,
   MoreHorizontal,
   CheckCircle2,
   XCircle,
   Eye,
   Loader2,
-  Download,
-  SlidersHorizontal,
+  Circle,
+  Clock,
+  Settings2,
+  CheckIcon,
+  PlusCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
-  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuCheckboxItem,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+  CommandSeparator,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Separator } from "@/components/ui/separator";
 import {
   Table,
   TableBody,
@@ -46,86 +76,19 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { Severity, AlertStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
-
-// Mapping des règles
-const RULES_MAP: Record<string, { name: string; severity: Severity }> = {
-  "00097670-06b9-406a-97cc-c8d138448eff": { name: "Lead dormant", severity: "critical" },
-  "23934576-a556-4035-8dc8-2d851a86e02e": { name: "Rappel oublié", severity: "critical" },
-  "59cb9b8e-6916-47f8-898c-c2e18c81f4a6": { name: "Unreachable suspect", severity: "warning" },
-  "7caa90f2-9288-4c80-8d6a-6d3078c6a135": { name: "Clôture trop rapide", severity: "warning" },
-  "c99b95b1-5dd6-48ed-b703-84df70e4eddb": { name: "Acharnement", severity: "info" },
-};
-
-// Mapping des campagnes Admissions (12)
-const CAMPAIGNS_MAP: Record<string, string> = {
-  "5612": "Métiers Animaliers",
-  "5927": "Electricien",
-  "5920": "CAP MIS",
-  "5622": "Campagne Nutritionniste",
-  "5611": "Campagne Mode",
-  "5621": "Décorateur Intérieur",
-  "5580": "Campagne AEPE",
-  "6064": "CA - Titres Professionnels",
-  "6051": "CA - Métiers de la Beauté",
-  "6046": "CA - Métiers de Bouche",
-  "6050": "CA - Céramiste Fleuriste",
-  "6082": "CA - Mode Déco",
-};
-
-function getCampaignName(campaignId: string): string {
-  return CAMPAIGNS_MAP[campaignId] || `Campagne ${campaignId}`;
-}
-
-function mapStatus(status: string): AlertStatus {
-  if (status === "open") return "new";
-  return status as AlertStatus;
-}
-
-function formatTimeAgo(date: Date): string {
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMins / 60);
-  const diffDays = Math.floor(diffHours / 24);
-
-  if (diffMins < 60) return `Il y a ${diffMins}min`;
-  if (diffHours < 24) return `Il y a ${diffHours}h`;
-  return `Il y a ${diffDays}j`;
-}
-
-function formatDuration(seconds: number | undefined): string {
-  if (!seconds) return "-";
-  if (seconds < 60) return `${seconds}s`;
-  const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  return `${mins}m${secs > 0 ? ` ${secs}s` : ""}`;
-}
-
-// Labels français
-const STATUS_LABELS: Record<string, string> = {
-  new: "Nouvelle",
-  acknowledged: "En cours",
-  resolved: "Résolue",
-  dismissed: "Ignorée",
-};
-
-const SEVERITY_LABELS: Record<string, string> = {
-  critical: "Critique",
-  warning: "Attention",
-  info: "Info",
-};
+import { styles } from "@/lib/styles";
+import {
+  RULES_MAP,
+  CAMPAIGNS_MAP,
+  getCampaignName,
+  getRuleInfo,
+  mapStatus,
+  formatTimeAgo,
+} from "@/lib/constants";
 
 // Types
 interface AlertRow {
@@ -138,10 +101,183 @@ interface AlertRow {
   campaign: string;
   campaignId: string;
   detectedAt: Date;
-  tryNumber?: number;
-  talkDuration?: number;
   agent?: string;
-  wrapupName?: string;
+  // Colonnes dynamiques (depuis alert_data)
+  lastCall?: Date;
+  wrapup?: string;
+  talkDuration?: number;
+  tryNumber?: number;
+  callCount?: number;
+  wrapupList?: string;
+  retryDate?: Date;
+  delayHours?: number;
+}
+
+// Options pour les filtres avec icônes
+const severityOptions = [
+  { label: "Critique", value: "critical", icon: ArrowUp },
+  { label: "Attention", value: "warning", icon: ArrowRight },
+  { label: "Info", value: "info", icon: ArrowDown },
+];
+
+const statusOptions = [
+  { label: "Nouvelle", value: "new", icon: Circle },
+  { label: "En cours", value: "acknowledged", icon: Clock },
+  { label: "Résolue", value: "resolved", icon: CheckCircle2 },
+  { label: "Ignorée", value: "dismissed", icon: XCircle },
+];
+
+const ruleOptions = Object.entries(RULES_MAP).map(([id, rule]) => ({
+  label: rule.name,
+  value: id,
+}));
+
+const campaignOptions = Object.entries(CAMPAIGNS_MAP).map(([id, name]) => ({
+  label: name,
+  value: id,
+}));
+
+// Labels des colonnes pour le bouton View
+const columnLabels: Record<string, string> = {
+  leadId: "Lead",
+  ruleName: "Règle",
+  status: "Statut",
+  campaign: "Formation",
+  agent: "Agent",
+  detectedAt: "Détecté",
+  lastCall: "Dernier appel",
+  wrapup: "Wrapup",
+  talkDuration: "Durée conversation",
+  tryNumber: "N° tentative",
+  callCount: "Nb appels",
+  wrapupList: "Liste wrapups",
+  retryDate: "Date retry",
+  delayHours: "Délai (h)",
+};
+
+// Composant Faceted Filter inline
+interface FacetedFilterProps {
+  title: string;
+  options: {
+    label: string;
+    value: string;
+    icon?: React.ComponentType<{ className?: string }>;
+  }[];
+  selectedValues: Set<string>;
+  onSelectionChange: (values: Set<string>) => void;
+  facets?: Map<string, number>;
+}
+
+function FacetedFilter({
+  title,
+  options,
+  selectedValues,
+  onSelectionChange,
+  facets,
+}: FacetedFilterProps) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="outline" size="sm" className="h-8 border-dashed">
+          <PlusCircle className="size-4" />
+          {title}
+          {selectedValues.size > 0 && (
+            <>
+              <Separator orientation="vertical" className="mx-2 h-4" />
+              <Badge
+                variant="secondary"
+                className="rounded-sm px-1 font-normal lg:hidden"
+              >
+                {selectedValues.size}
+              </Badge>
+              <div className="hidden space-x-1 lg:flex">
+                {selectedValues.size > 2 ? (
+                  <Badge
+                    variant="secondary"
+                    className="rounded-sm px-1 font-normal"
+                  >
+                    {selectedValues.size} sélectionnés
+                  </Badge>
+                ) : (
+                  options
+                    .filter((option) => selectedValues.has(option.value))
+                    .map((option) => (
+                      <Badge
+                        variant="secondary"
+                        key={option.value}
+                        className="rounded-sm px-1 font-normal"
+                      >
+                        {option.label}
+                      </Badge>
+                    ))
+                )}
+              </div>
+            </>
+          )}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[200px] p-0" align="start">
+        <Command>
+          <CommandInput placeholder={title} />
+          <CommandList>
+            <CommandEmpty>Aucun résultat.</CommandEmpty>
+            <CommandGroup>
+              {options.map((option) => {
+                const isSelected = selectedValues.has(option.value);
+                return (
+                  <CommandItem
+                    key={option.value}
+                    onSelect={() => {
+                      const newValues = new Set(selectedValues);
+                      if (isSelected) {
+                        newValues.delete(option.value);
+                      } else {
+                        newValues.add(option.value);
+                      }
+                      onSelectionChange(newValues);
+                    }}
+                  >
+                    <div
+                      className={cn(
+                        "mr-2 flex h-4 w-4 shrink-0 items-center justify-center rounded-[3px] border border-gray-300 dark:border-gray-600",
+                        isSelected
+                          ? "bg-primary border-primary text-primary-foreground"
+                          : "[&_svg]:invisible"
+                      )}
+                    >
+                      <CheckIcon className="h-3 w-3" />
+                    </div>
+                    {option.icon && (
+                      <option.icon className="text-muted-foreground size-4" />
+                    )}
+                    <span className="flex-1">{option.label}</span>
+                    {facets?.get(option.value) !== undefined && (
+                      <span className="ml-auto font-mono text-xs text-muted-foreground">
+                        {facets.get(option.value)}
+                      </span>
+                    )}
+                  </CommandItem>
+                );
+              })}
+            </CommandGroup>
+            {selectedValues.size > 0 && (
+              <>
+                <CommandSeparator />
+                <CommandGroup>
+                  <CommandItem
+                    onSelect={() => onSelectionChange(new Set())}
+                    className="justify-center text-center"
+                  >
+                    Effacer les filtres
+                  </CommandItem>
+                </CommandGroup>
+              </>
+            )}
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 // Colonnes du tableau
@@ -162,249 +298,310 @@ const columns: ColumnDef<AlertRow>[] = [
       <Checkbox
         checked={row.getIsSelected()}
         onCheckedChange={(value) => row.toggleSelected(!!value)}
-        aria-label="Sélectionner la ligne"
+        aria-label="Sélectionner"
       />
     ),
     enableSorting: false,
     enableHiding: false,
+    size: 40,
   },
   {
-    accessorKey: "severity",
-    header: ({ column }) => (
-      <Button
-        variant="ghost"
-        onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-        className="-ml-4"
-      >
-        Priorité
-        <ArrowUpDown className="ml-2 h-4 w-4" />
-      </Button>
+    accessorKey: "leadId",
+    header: () => <span className="text-sm font-medium">Lead</span>,
+    cell: ({ row }) => (
+      <div className="w-[80px]">{row.getValue("leadId")}</div>
     ),
-    cell: ({ row }) => {
-      const severity = row.getValue("severity") as Severity;
-      return (
-        <div className="flex items-center gap-2">
-          <span
-            className={cn(
-              "w-2 h-2 rounded-full",
-              severity === "critical" ? "bg-red-500" :
-              severity === "warning" ? "bg-amber-500" : "bg-blue-500"
-            )}
-          />
-          <Badge
-            variant="outline"
-            className={cn(
-              "font-normal",
-              severity === "critical" ? "border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-400" :
-              severity === "warning" ? "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-400" :
-              "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-400"
-            )}
-          >
-            {SEVERITY_LABELS[severity]}
-          </Badge>
-        </div>
-      );
-    },
-    sortingFn: (rowA, rowB) => {
-      const order = { critical: 0, warning: 1, info: 2 };
-      return order[rowA.original.severity] - order[rowB.original.severity];
-    },
-    filterFn: (row, id, value) => {
-      return value.includes(row.getValue(id));
-    },
   },
   {
     accessorKey: "ruleName",
     header: ({ column }) => (
-      <Button
-        variant="ghost"
-        onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-        className="-ml-4"
-      >
-        Type d'anomalie
-        <ArrowUpDown className="ml-2 h-4 w-4" />
-      </Button>
+      <div className="flex items-center gap-2">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="-ml-3 h-8 data-[state=open]:bg-accent"
+            >
+              <span>Règle</span>
+              <ChevronsUpDown className="size-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            <DropdownMenuItem onClick={() => column.toggleSorting(false)}>
+              <ArrowUp className="text-muted-foreground size-4" />
+              Asc
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => column.toggleSorting(true)}>
+              <ArrowDown className="text-muted-foreground size-4" />
+              Desc
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
     ),
-    cell: ({ row }) => (
-      <Link
-        href={`/alerts/${row.original.id}`}
-        className="font-medium hover:underline text-gray-900 dark:text-gray-100"
-      >
-        {row.getValue("ruleName")}
-      </Link>
-    ),
-    filterFn: (row, id, value) => {
-      return value.includes(row.original.ruleId);
+    cell: ({ row }) => {
+      const severity = row.original.severity;
+      return (
+        <div className="flex gap-2">
+          <Badge variant={severity}>{row.getValue("ruleName")}</Badge>
+        </div>
+      );
     },
-  },
-  {
-    accessorKey: "leadId",
-    header: "N° Lead",
-    cell: ({ row }) => (
-      <Link
-        href={`/alerts/${row.original.id}`}
-        className="font-mono text-xs text-gray-600 dark:text-gray-400 hover:underline"
-      >
-        #{row.getValue("leadId")}
-      </Link>
-    ),
   },
   {
     accessorKey: "status",
-    header: "Statut",
+    header: ({ column }) => (
+      <div className="flex items-center gap-2">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="-ml-3 h-8 data-[state=open]:bg-accent"
+            >
+              <span>Statut</span>
+              <ChevronsUpDown className="size-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            <DropdownMenuItem onClick={() => column.toggleSorting(false)}>
+              <ArrowUp className="text-muted-foreground size-4" />
+              Asc
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => column.toggleSorting(true)}>
+              <ArrowDown className="text-muted-foreground size-4" />
+              Desc
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    ),
     cell: ({ row }) => {
       const status = row.getValue("status") as AlertStatus;
+      const statusConfig: Record<
+        AlertStatus,
+        {
+          label: string;
+          icon: React.ComponentType<{ className?: string }>;
+        }
+      > = {
+        new: { label: "Nouvelle", icon: Circle },
+        acknowledged: { label: "En cours", icon: Clock },
+        resolved: { label: "Résolue", icon: CheckCircle2 },
+        dismissed: { label: "Ignorée", icon: XCircle },
+        ignored: { label: "Ignorée", icon: XCircle },
+      };
+      const config = statusConfig[status] || statusConfig.new;
+      const Icon = config.icon;
       return (
-        <Badge
-          variant="outline"
-          className={cn(
-            "font-normal",
-            status === "new" ? "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-400" :
-            status === "acknowledged" ? "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-400" :
-            status === "resolved" ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-400" :
-            "border-gray-200 bg-gray-50 text-gray-700 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-400"
-          )}
-        >
-          {STATUS_LABELS[status] || status}
-        </Badge>
+        <div className="flex w-[100px] items-center gap-2">
+          <Icon className="text-muted-foreground size-4" />
+          <span>{config.label}</span>
+        </div>
       );
     },
-    filterFn: (row, id, value) => {
-      return value.includes(row.getValue(id));
-    },
+    filterFn: (row, id, value) => value.includes(row.getValue(id)),
   },
   {
     accessorKey: "campaign",
     header: ({ column }) => (
-      <Button
-        variant="ghost"
-        onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-        className="-ml-4"
-      >
-        Formation
-        <ArrowUpDown className="ml-2 h-4 w-4" />
-      </Button>
+      <div className="flex items-center gap-2">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="-ml-3 h-8 data-[state=open]:bg-accent"
+            >
+              <span>Formation</span>
+              <ChevronsUpDown className="size-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            <DropdownMenuItem onClick={() => column.toggleSorting(false)}>
+              <ArrowUp className="text-muted-foreground size-4" />
+              Asc
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => column.toggleSorting(true)}>
+              <ArrowDown className="text-muted-foreground size-4" />
+              Desc
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
     ),
     cell: ({ row }) => (
-      <span className="text-sm text-gray-600 dark:text-gray-400 truncate max-w-[150px] block">
+      <span className="max-w-[200px] truncate font-medium">
         {row.getValue("campaign")}
       </span>
     ),
-    filterFn: (row, id, value) => {
-      return value.includes(row.original.campaignId);
-    },
   },
   {
     accessorKey: "agent",
-    header: "Agent",
+    header: () => <span className="text-sm font-medium">Agent</span>,
     cell: ({ row }) => (
-      <span className="text-sm text-gray-600 dark:text-gray-400">
-        {row.getValue("agent") || "-"}
-      </span>
-    ),
-  },
-  {
-    accessorKey: "wrapupName",
-    header: "Qualification",
-    cell: ({ row }) => {
-      const wrapup = row.getValue("wrapupName") as string | undefined;
-      if (!wrapup) return <span className="text-gray-400">-</span>;
-      
-      return (
-        <Badge
-          variant="outline"
-          className={cn(
-            "font-normal text-xs",
-            ["Perdu", "Pas intéressé", "Raccroche", "Faux numéro"].includes(wrapup)
-              ? "border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-400" :
-            ["RDV", "RDV IN", "Appel intermédiaire", "Besoin de réflexion"].includes(wrapup)
-              ? "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-400" :
-            ["Répondeur", "Injoignable"].includes(wrapup)
-              ? "border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-800 dark:bg-orange-950 dark:text-orange-400" :
-            ["Gagné"].includes(wrapup)
-              ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-400" :
-              "border-gray-200 bg-gray-50 text-gray-700 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-400"
-          )}
-        >
-          {wrapup}
-        </Badge>
-      );
-    },
-  },
-  {
-    accessorKey: "tryNumber",
-    header: "Tentative",
-    cell: ({ row }) => (
-      <span className="text-sm text-gray-600 dark:text-gray-400 text-center block">
-        {row.getValue("tryNumber") || "-"}
-      </span>
-    ),
-  },
-  {
-    accessorKey: "talkDuration",
-    header: "Durée",
-    cell: ({ row }) => (
-      <span className="text-sm text-gray-600 dark:text-gray-400">
-        {formatDuration(row.getValue("talkDuration"))}
+      <span className="text-muted-foreground">
+        {row.getValue("agent") || "—"}
       </span>
     ),
   },
   {
     accessorKey: "detectedAt",
     header: ({ column }) => (
-      <Button
-        variant="ghost"
-        onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-        className="-ml-4"
-      >
-        Détecté
-        <ArrowUpDown className="ml-2 h-4 w-4" />
-      </Button>
+      <div className="flex items-center gap-2">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="-ml-3 h-8 data-[state=open]:bg-accent"
+            >
+              <span>Détecté</span>
+              <ChevronsUpDown className="size-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            <DropdownMenuItem onClick={() => column.toggleSorting(false)}>
+              <ArrowUp className="text-muted-foreground size-4" />
+              Asc
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => column.toggleSorting(true)}>
+              <ArrowDown className="text-muted-foreground size-4" />
+              Desc
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
     ),
+    cell: ({ row }) => (
+      <span className="text-muted-foreground">
+        {formatTimeAgo(row.getValue("detectedAt"))}
+      </span>
+    ),
+  },
+  // Colonnes dynamiques (masquées par défaut)
+  {
+    accessorKey: "lastCall",
+    header: () => <span className="text-sm font-medium">Dernier appel</span>,
     cell: ({ row }) => {
-      const date = row.getValue("detectedAt") as Date;
+      const value = row.getValue("lastCall") as Date | undefined;
       return (
-        <div className="text-sm">
-          <div className="text-gray-900 dark:text-gray-100">{formatTimeAgo(date)}</div>
-          <div className="text-xs text-gray-500 dark:text-gray-400">
-            {date.toLocaleDateString("fr-FR")}
-          </div>
-        </div>
+        <span className="text-muted-foreground">
+          {value ? formatTimeAgo(value) : "—"}
+        </span>
+      );
+    },
+  },
+  {
+    accessorKey: "wrapup",
+    header: () => <span className="text-sm font-medium">Wrapup</span>,
+    cell: ({ row }) => (
+      <span className="text-muted-foreground">
+        {row.getValue("wrapup") || "—"}
+      </span>
+    ),
+  },
+  {
+    accessorKey: "talkDuration",
+    header: () => <span className="text-sm font-medium">Durée (s)</span>,
+    cell: ({ row }) => {
+      const value = row.getValue("talkDuration") as number | undefined;
+      return (
+        <span className="text-muted-foreground">
+          {value !== undefined ? `${value}s` : "—"}
+        </span>
+      );
+    },
+  },
+  {
+    accessorKey: "tryNumber",
+    header: () => <span className="text-sm font-medium">N° tent.</span>,
+    cell: ({ row }) => {
+      const value = row.getValue("tryNumber") as number | undefined;
+      return (
+        <span className="text-muted-foreground">
+          {value !== undefined ? value : "—"}
+        </span>
+      );
+    },
+  },
+  {
+    accessorKey: "callCount",
+    header: () => <span className="text-sm font-medium">Nb appels</span>,
+    cell: ({ row }) => {
+      const value = row.getValue("callCount") as number | undefined;
+      return (
+        <span className="text-muted-foreground">
+          {value !== undefined ? value : "—"}
+        </span>
+      );
+    },
+  },
+  {
+    accessorKey: "wrapupList",
+    header: () => <span className="text-sm font-medium">Wrapups</span>,
+    cell: ({ row }) => (
+      <span className="text-muted-foreground max-w-[150px] truncate">
+        {row.getValue("wrapupList") || "—"}
+      </span>
+    ),
+  },
+  {
+    accessorKey: "retryDate",
+    header: () => <span className="text-sm font-medium">Date retry</span>,
+    cell: ({ row }) => {
+      const value = row.getValue("retryDate") as Date | undefined;
+      return (
+        <span className="text-muted-foreground">
+          {value ? formatTimeAgo(value) : "—"}
+        </span>
+      );
+    },
+  },
+  {
+    accessorKey: "delayHours",
+    header: () => <span className="text-sm font-medium">Délai (h)</span>,
+    cell: ({ row }) => {
+      const value = row.getValue("delayHours") as number | undefined;
+      return (
+        <span className="text-muted-foreground">
+          {value !== undefined ? `${value}h` : "—"}
+        </span>
       );
     },
   },
   {
     id: "actions",
-    enableHiding: false,
     cell: ({ row }) => {
       const alert = row.original;
-
       return (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="h-8 w-8 p-0">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-8 data-[state=open]:bg-muted"
+            >
+              <MoreHorizontal className="size-4" />
               <span className="sr-only">Menu</span>
-              <MoreHorizontal className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent 
-            align="end"
-            className="bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm border border-gray-200 dark:border-gray-700 shadow-lg"
-          >
+          <DropdownMenuContent align="end">
             <DropdownMenuLabel>Actions</DropdownMenuLabel>
             <DropdownMenuItem asChild>
               <Link href={`/alerts/${alert.id}`}>
-                <Eye className="mr-2 h-4 w-4" />
-                Voir le détail
+                <Eye className="size-4" />
+                Voir détail
               </Link>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem>
-              <CheckCircle2 className="mr-2 h-4 w-4" />
-              Marquer résolu
+              <CheckCircle2 className="size-4" />
+              Résoudre
             </DropdownMenuItem>
             <DropdownMenuItem>
-              <XCircle className="mr-2 h-4 w-4" />
+              <XCircle className="size-4" />
               Ignorer
             </DropdownMenuItem>
           </DropdownMenuContent>
@@ -420,16 +617,25 @@ export default function AlertsPage() {
   const [sorting, setSorting] = useState<SortingState>([
     { id: "detectedAt", desc: true },
   ]);
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
-  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
+  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({
+    // Colonnes dynamiques masquées par défaut
+    lastCall: false,
+    wrapup: false,
+    talkDuration: false,
+    tryNumber: false,
+    callCount: false,
+    wrapupList: false,
+    retryDate: false,
+    delayHours: false,
+  });
   const [rowSelection, setRowSelection] = useState({});
   const [globalFilter, setGlobalFilter] = useState("");
 
-  // Filtres personnalisés
-  const [severityFilter, setSeverityFilter] = useState<string>("all");
-  const [typeFilter, setTypeFilter] = useState<string>("all");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [campaignFilter, setCampaignFilter] = useState<string>("all");
+  // Filtres
+  const [severityFilter, setSeverityFilter] = useState<Set<string>>(new Set());
+  const [statusFilter, setStatusFilter] = useState<Set<string>>(new Set());
+  const [ruleFilter, setRuleFilter] = useState<Set<string>>(new Set());
+  const [campaignFilter, setCampaignFilter] = useState<Set<string>>(new Set());
 
   async function fetchAlerts() {
     const { data: alertsData } = await supabase
@@ -439,8 +645,11 @@ export default function AlertsPage() {
       .limit(500);
 
     const transformed: AlertRow[] = (alertsData || []).map((data) => {
-      const ruleInfo = RULES_MAP[data.rule_id] || { name: "Règle inconnue", severity: "info" as Severity };
-      const alertData = typeof data.alert_data === "string" ? JSON.parse(data.alert_data) : data.alert_data || {};
+      const ruleInfo = getRuleInfo(data.rule_id);
+      const alertData =
+        typeof data.alert_data === "string"
+          ? JSON.parse(data.alert_data)
+          : data.alert_data || {};
 
       return {
         id: data.id,
@@ -452,10 +661,18 @@ export default function AlertsPage() {
         campaign: getCampaignName(data.campaign),
         campaignId: data.campaign,
         detectedAt: new Date(data.detected_at),
-        tryNumber: alertData.triesNumber || alertData.try_number || alertData.call_count,
-        talkDuration: alertData.talk_duration || alertData.talkDuration,
         agent: alertData.agent || alertData.user_login1 || alertData.user_login,
-        wrapupName: alertData.wrapup_name || alertData.wrapupName || alertData.wrapup,
+        // Colonnes dynamiques depuis alert_data
+        lastCall: alertData.last_call || alertData.call_start
+          ? new Date(alertData.last_call || alertData.call_start)
+          : undefined,
+        wrapup: alertData.wrapup || alertData.wrapup_name,
+        talkDuration: alertData.talk_duration,
+        tryNumber: alertData.try_number,
+        callCount: alertData.call_count || alertData.total_calls,
+        wrapupList: alertData.wrapup_list,
+        retryDate: alertData.retry_date ? new Date(alertData.retry_date) : undefined,
+        delayHours: alertData.delay_hours || alertData.hours_since_retry,
       };
     });
 
@@ -470,10 +687,13 @@ export default function AlertsPage() {
   // Filtrage des données
   const filteredData = useMemo(() => {
     return data.filter((alert) => {
-      if (severityFilter !== "all" && alert.severity !== severityFilter) return false;
-      if (typeFilter !== "all" && alert.ruleId !== typeFilter) return false;
-      if (statusFilter !== "all" && alert.status !== statusFilter) return false;
-      if (campaignFilter !== "all" && alert.campaignId !== campaignFilter) return false;
+      if (severityFilter.size > 0 && !severityFilter.has(alert.severity))
+        return false;
+      if (statusFilter.size > 0 && !statusFilter.has(alert.status))
+        return false;
+      if (ruleFilter.size > 0 && !ruleFilter.has(alert.ruleId)) return false;
+      if (campaignFilter.size > 0 && !campaignFilter.has(alert.campaignId))
+        return false;
       if (globalFilter) {
         const search = globalFilter.toLowerCase();
         return (
@@ -485,13 +705,36 @@ export default function AlertsPage() {
       }
       return true;
     });
-  }, [data, severityFilter, typeFilter, statusFilter, campaignFilter, globalFilter]);
+  }, [
+    data,
+    severityFilter,
+    statusFilter,
+    ruleFilter,
+    campaignFilter,
+    globalFilter,
+  ]);
+
+  // Facets (compteurs)
+  const severityFacets = useMemo(() => {
+    const map = new Map<string, number>();
+    data.forEach((alert) => {
+      map.set(alert.severity, (map.get(alert.severity) || 0) + 1);
+    });
+    return map;
+  }, [data]);
+
+  const statusFacets = useMemo(() => {
+    const map = new Map<string, number>();
+    data.forEach((alert) => {
+      map.set(alert.status, (map.get(alert.status) || 0) + 1);
+    });
+    return map;
+  }, [data]);
 
   const table = useReactTable({
     data: filteredData,
     columns,
     onSortingChange: setSorting,
-    onColumnFiltersChange: setColumnFilters,
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     getSortedRowModel: getSortedRowModel(),
@@ -500,7 +743,6 @@ export default function AlertsPage() {
     onRowSelectionChange: setRowSelection,
     state: {
       sorting,
-      columnFilters,
       columnVisibility,
       rowSelection,
     },
@@ -511,13 +753,18 @@ export default function AlertsPage() {
     },
   });
 
-  const hasActiveFilters = severityFilter !== "all" || typeFilter !== "all" || statusFilter !== "all" || campaignFilter !== "all" || globalFilter !== "";
+  const hasActiveFilters =
+    severityFilter.size > 0 ||
+    statusFilter.size > 0 ||
+    ruleFilter.size > 0 ||
+    campaignFilter.size > 0 ||
+    globalFilter !== "";
 
   function clearFilters() {
-    setSeverityFilter("all");
-    setTypeFilter("all");
-    setStatusFilter("all");
-    setCampaignFilter("all");
+    setSeverityFilter(new Set());
+    setStatusFilter(new Set());
+    setRuleFilter(new Set());
+    setCampaignFilter(new Set());
     setGlobalFilter("");
   }
 
@@ -525,183 +772,108 @@ export default function AlertsPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+      <div className={styles.loading.wrapper}>
+        <Loader2 className={styles.loading.spinner} />
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col gap-4">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">Alertes</h1>
-        <p className="text-gray-500 dark:text-gray-400 text-sm">
-          Gérez et traitez les anomalies détectées par Vigie
+      <div className="flex flex-col gap-1">
+        <h2 className="text-2xl font-semibold tracking-tight">Alertes</h2>
+        <p className="text-muted-foreground">
+          Gérez les anomalies détectées par Vigie
         </p>
       </div>
 
       {/* Toolbar */}
       <div className="flex flex-col gap-4">
-        {/* Row 1: Search + Filters */}
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Recherche */}
-          <div className="relative flex-1 min-w-[200px] max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+        <div className="flex items-center justify-between">
+          <div className="flex flex-1 items-center gap-2">
+            {/* Recherche sans icône */}
             <Input
-              placeholder="Rechercher lead, agent..."
+              placeholder="Filtrer les alertes..."
               value={globalFilter}
               onChange={(e) => setGlobalFilter(e.target.value)}
-              className="pl-9"
+              className="h-8 w-[150px] lg:w-[250px]"
             />
-          </div>
 
-          {/* Filtre Type */}
-          <Select value={typeFilter} onValueChange={setTypeFilter}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Type d'anomalie" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Tous les types</SelectItem>
-              {Object.entries(RULES_MAP).map(([id, rule]) => (
-                <SelectItem key={id} value={id}>
-                  {rule.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            {/* Filtres faceted */}
+            <FacetedFilter
+              title="Sévérité"
+              options={severityOptions}
+              selectedValues={severityFilter}
+              onSelectionChange={setSeverityFilter}
+              facets={severityFacets}
+            />
+            <FacetedFilter
+              title="Statut"
+              options={statusOptions}
+              selectedValues={statusFilter}
+              onSelectionChange={setStatusFilter}
+              facets={statusFacets}
+            />
+            <FacetedFilter
+              title="Règle"
+              options={ruleOptions}
+              selectedValues={ruleFilter}
+              onSelectionChange={setRuleFilter}
+            />
+            <FacetedFilter
+              title="Formation"
+              options={campaignOptions}
+              selectedValues={campaignFilter}
+              onSelectionChange={setCampaignFilter}
+            />
 
-          {/* Filtre Priorité */}
-          <Select value={severityFilter} onValueChange={setSeverityFilter}>
-            <SelectTrigger className="w-[150px]">
-              <SelectValue placeholder="Priorité" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Toutes</SelectItem>
-              <SelectItem value="critical">
-                <span className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-red-500" />
-                  Critique
-                </span>
-              </SelectItem>
-              <SelectItem value="warning">
-                <span className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-amber-500" />
-                  Attention
-                </span>
-              </SelectItem>
-              <SelectItem value="info">
-                <span className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-blue-500" />
-                  Info
-                </span>
-              </SelectItem>
-            </SelectContent>
-          </Select>
-
-          {/* Filtre Statut */}
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-[140px]">
-              <SelectValue placeholder="Statut" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Tous</SelectItem>
-              <SelectItem value="new">Nouvelle</SelectItem>
-              <SelectItem value="acknowledged">En cours</SelectItem>
-              <SelectItem value="resolved">Résolue</SelectItem>
-              <SelectItem value="dismissed">Ignorée</SelectItem>
-            </SelectContent>
-          </Select>
-
-          {/* Filtre Formation */}
-          <Select value={campaignFilter} onValueChange={setCampaignFilter}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Formation" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Toutes</SelectItem>
-              {Object.entries(CAMPAIGNS_MAP).map(([id, name]) => (
-                <SelectItem key={id} value={id}>
-                  {name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          {/* Clear filters */}
-          {hasActiveFilters && (
-            <Button variant="ghost" onClick={clearFilters} className="h-9 px-3">
-              Réinitialiser
-              <X className="ml-2 h-4 w-4" />
-            </Button>
-          )}
-        </div>
-
-        {/* Row 2: Actions + Column visibility */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            {selectedCount > 0 && (
-              <>
-                <span className="text-sm text-gray-500 dark:text-gray-400">
-                  {selectedCount} sélectionnée{selectedCount > 1 ? "s" : ""}
-                </span>
-                <Button variant="outline" size="sm">
-                  <CheckCircle2 className="mr-2 h-4 w-4" />
-                  Marquer résolu
-                </Button>
-                <Button variant="outline" size="sm">
-                  <XCircle className="mr-2 h-4 w-4" />
-                  Ignorer
-                </Button>
-              </>
-            )}
-            {selectedCount === 0 && (
-              <span className="text-sm text-gray-500 dark:text-gray-400">
-                {filteredData.length} alerte{filteredData.length > 1 ? "s" : ""}
-              </span>
+            {hasActiveFilters && (
+              <Button
+                variant="ghost"
+                onClick={clearFilters}
+                className="h-8 px-2 lg:px-3"
+              >
+                Réinitialiser
+                <X className="size-4" />
+              </Button>
             )}
           </div>
 
+          {/* Bouton View */}
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm">
-              <Download className="mr-2 h-4 w-4" />
-              Exporter
-            </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm">
-                  <SlidersHorizontal className="mr-2 h-4 w-4" />
-                  Colonnes
-                  <ChevronDown className="ml-2 h-4 w-4" />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="ml-auto hidden h-8 lg:flex"
+                >
+                  <Settings2 className="size-4" />
+                  View
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent 
-                align="end"
-                className="bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm border border-gray-200 dark:border-gray-700 shadow-lg"
-              >
+              <DropdownMenuContent align="end" className="w-[180px]">
+                <DropdownMenuLabel>Afficher/Masquer</DropdownMenuLabel>
+                <DropdownMenuSeparator />
                 {table
                   .getAllColumns()
-                  .filter((column) => column.getCanHide())
+                  .filter(
+                    (column) =>
+                      typeof column.accessorFn !== "undefined" &&
+                      column.getCanHide()
+                  )
                   .map((column) => {
-                    const columnNames: Record<string, string> = {
-                      severity: "Priorité",
-                      ruleName: "Type d'anomalie",
-                      leadId: "N° Lead",
-                      status: "Statut",
-                      campaign: "Formation",
-                      agent: "Agent",
-                      wrapupName: "Qualification",
-                      tryNumber: "Tentative",
-                      talkDuration: "Durée",
-                      detectedAt: "Détecté",
-                    };
+                    const label = columnLabels[column.id] || column.id;
                     return (
                       <DropdownMenuCheckboxItem
                         key={column.id}
                         checked={column.getIsVisible()}
-                        onCheckedChange={(value) => column.toggleVisibility(!!value)}
+                        onCheckedChange={(value) =>
+                          column.toggleVisibility(!!value)
+                        }
                       >
-                        {columnNames[column.id] || column.id}
+                        {label}
                       </DropdownMenuCheckboxItem>
                     );
                   })}
@@ -709,16 +881,36 @@ export default function AlertsPage() {
             </DropdownMenu>
           </div>
         </div>
+
+        {/* Actions de masse */}
+        {selectedCount > 0 && (
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">
+              {selectedCount} sélectionnée{selectedCount > 1 ? "s" : ""}
+            </span>
+            <Button variant="outline" size="sm">
+              <CheckCircle2 className="size-4" />
+              Résoudre
+            </Button>
+            <Button variant="outline" size="sm">
+              <XCircle className="size-4" />
+              Ignorer
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Table */}
-      <div className="rounded-md border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
+      <div className="overflow-hidden rounded-md border">
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
-                  <TableHead key={header.id}>
+                  <TableHead
+                    key={header.id}
+                    className={header.id === "select" ? "w-[40px]" : undefined}
+                  >
                     {header.isPlaceholder
                       ? null
                       : flexRender(
@@ -738,7 +930,10 @@ export default function AlertsPage() {
                   data-state={row.getIsSelected() && "selected"}
                 >
                   {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
+                    <TableCell
+                      key={cell.id}
+                      className={cell.column.id === "select" ? "w-[40px]" : undefined}
+                    >
                       {flexRender(
                         cell.column.columnDef.cell,
                         cell.getContext()
@@ -749,12 +944,9 @@ export default function AlertsPage() {
               ))
             ) : (
               <TableRow>
-                <TableCell
-                  colSpan={columns.length}
-                  className="h-24 text-center"
-                >
-                  <div className="flex flex-col items-center gap-2 text-gray-500">
-                    <CheckCircle2 className="h-8 w-8 text-gray-300" />
+                <TableCell colSpan={columns.length} className="h-24 text-center">
+                  <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                    <CheckCircle2 className="size-8 opacity-50" />
                     Aucune alerte trouvée
                     {hasActiveFilters && (
                       <Button variant="ghost" size="sm" onClick={clearFilters}>
@@ -770,28 +962,19 @@ export default function AlertsPage() {
       </div>
 
       {/* Pagination */}
-      <div className="flex items-center justify-between">
-        <div className="text-sm text-gray-500 dark:text-gray-400">
-          {selectedCount > 0 ? (
-            <span>{selectedCount} sur {filteredData.length} sélectionnée{selectedCount > 1 ? "s" : ""}</span>
-          ) : (
-            <span>
-              Page {table.getState().pagination.pageIndex + 1} sur{" "}
-              {table.getPageCount()}
-            </span>
-          )}
+      <div className="flex items-center justify-between px-2">
+        <div className="text-muted-foreground flex-1 text-sm">
+          {selectedCount} sur {filteredData.length} ligne(s) sélectionnée(s).
         </div>
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-500 dark:text-gray-400">Lignes par page</span>
+        <div className="flex items-center space-x-6 lg:space-x-8">
+          <div className="flex items-center space-x-2">
+            <p className="text-sm font-medium">Lignes par page</p>
             <Select
               value={`${table.getState().pagination.pageSize}`}
-              onValueChange={(value) => {
-                table.setPageSize(Number(value));
-              }}
+              onValueChange={(value) => table.setPageSize(Number(value))}
             >
               <SelectTrigger className="h-8 w-[70px]">
-                <SelectValue placeholder={table.getState().pagination.pageSize} />
+                <SelectValue />
               </SelectTrigger>
               <SelectContent side="top">
                 {[10, 20, 30, 50, 100].map((pageSize) => (
@@ -802,38 +985,50 @@ export default function AlertsPage() {
               </SelectContent>
             </Select>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex w-[100px] items-center justify-center text-sm font-medium">
+            Page {table.getState().pagination.pageIndex + 1} sur{" "}
+            {table.getPageCount()}
+          </div>
+          <div className="flex items-center space-x-2">
             <Button
               variant="outline"
-              size="sm"
+              size="icon"
+              className="hidden size-8 lg:flex"
               onClick={() => table.setPageIndex(0)}
               disabled={!table.getCanPreviousPage()}
             >
-              {"<<"}
+              <span className="sr-only">Première page</span>
+              <ChevronsLeft className="size-4" />
             </Button>
             <Button
               variant="outline"
-              size="sm"
+              size="icon"
+              className="size-8"
               onClick={() => table.previousPage()}
               disabled={!table.getCanPreviousPage()}
             >
-              {"<"}
+              <span className="sr-only">Page précédente</span>
+              <ChevronLeft className="size-4" />
             </Button>
             <Button
               variant="outline"
-              size="sm"
+              size="icon"
+              className="size-8"
               onClick={() => table.nextPage()}
               disabled={!table.getCanNextPage()}
             >
-              {">"}
+              <span className="sr-only">Page suivante</span>
+              <ChevronRight className="size-4" />
             </Button>
             <Button
               variant="outline"
-              size="sm"
+              size="icon"
+              className="hidden size-8 lg:flex"
               onClick={() => table.setPageIndex(table.getPageCount() - 1)}
               disabled={!table.getCanNextPage()}
             >
-              {">>"}
+              <span className="sr-only">Dernière page</span>
+              <ChevronsRight className="size-4" />
             </Button>
           </div>
         </div>

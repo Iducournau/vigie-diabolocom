@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { Sidebar } from "@/components/sidebar";
+import { SidebarProvider } from "@/components/sidebar-context";
+import { MainContent } from "@/components/main-content";
 import { ThemeProvider } from "@/components/theme-provider";
 import { FeedbackButton } from "@/components/feedback-button";
 import { Toaster } from "sonner";
@@ -27,12 +29,12 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <div className="bg-gray-50 dark:bg-gray-950 min-h-screen">
-            <Sidebar />
-            <main className="pl-56 min-h-screen">
-              <div className="p-8">{children}</div>
-            </main>
-          </div>
+          <SidebarProvider>
+            <div className="bg-gray-50 dark:bg-gray-950 min-h-screen">
+              <Sidebar />
+              <MainContent>{children}</MainContent>
+            </div>
+          </SidebarProvider>
           <FeedbackButton />
           <Toaster position="bottom-right" richColors />
         </ThemeProvider>

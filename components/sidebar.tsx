@@ -9,13 +9,13 @@ import {
   ScrollText,
   Settings,
   ChevronLeft,
-  LogOut,
   Moon,
   Sun,
   MessageSquare,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "next-themes";
+import { useSidebar } from "@/components/sidebar-context";
 
 const navigation = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
@@ -27,21 +27,13 @@ const navigation = [
 
 export function Sidebar() {
   const pathname = usePathname();
-  const [collapsed, setCollapsed] = useState(false);
+  const { collapsed, toggleCollapsed } = useSidebar();
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);
-    const saved = localStorage.getItem("sidebar-collapsed");
-    if (saved) setCollapsed(JSON.parse(saved));
   }, []);
-
-  const toggleCollapsed = () => {
-    const newState = !collapsed;
-    setCollapsed(newState);
-    localStorage.setItem("sidebar-collapsed", JSON.stringify(newState));
-  };
 
   return (
     <aside
@@ -53,7 +45,7 @@ export function Sidebar() {
       <div className="flex h-14 items-center justify-between border-b border-gray-200 px-4 dark:border-gray-800">
         {!collapsed && (
           <Link href="/" className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-orange-500 text-sm font-bold text-white">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-sm font-bold text-primary-foreground">
               V
             </div>
             <span className="font-semibold text-gray-900 dark:text-gray-100">
@@ -63,7 +55,7 @@ export function Sidebar() {
         )}
         {collapsed && (
           <Link href="/" className="mx-auto">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-orange-500 text-sm font-bold text-white">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-sm font-bold text-primary-foreground">
               V
             </div>
           </Link>
@@ -80,7 +72,7 @@ export function Sidebar() {
               href={item.href}
               className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                 isActive
-                  ? "bg-orange-50 text-orange-600 dark:bg-orange-900/20 dark:text-orange-400"
+                  ? "bg-primary/10 text-primary dark:bg-primary/20"
                   : "text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-100"
               } ${collapsed ? "justify-center px-2" : ""}`}
               title={collapsed ? item.name : undefined}

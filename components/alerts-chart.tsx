@@ -46,7 +46,7 @@ function CustomTooltip({ active, payload, label }: { active?: boolean; payload?:
   };
 
   return (
-    <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3">
+    <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-3">
       <p className="font-medium text-gray-900 dark:text-gray-100 mb-2">{label}</p>
       <div className="space-y-1.5">
         {payload.map((entry, index: number) => (
@@ -166,7 +166,7 @@ export function AlertsChart() {
   const isUp = trend > 0;
 
   return (
-    <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 shadow-sm">
+    <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800">
       {/* Header avec filtre */}
       <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-gray-800">
         <div>
@@ -183,7 +183,7 @@ export function AlertsChart() {
               className={cn(
                 "px-3 py-1 rounded text-sm transition-colors",
                 period === p.key
-                  ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm"
+                  ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                   : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
               )}
             >

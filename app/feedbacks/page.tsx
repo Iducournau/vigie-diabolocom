@@ -3,6 +3,9 @@
 import { useState, useEffect } from "react";
 import { Bug, Lightbulb, HelpCircle, Trash2, Clock, Plus, X, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import { styles } from "@/lib/styles";
+import { colors } from "@/lib/theme";
 import {
   Feedback,
   FeedbackType,
@@ -125,17 +128,16 @@ export default function FeedbacksPage() {
       {/* Header */}
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+          <h1 className={styles.page.title}>
             Feedbacks
           </h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400">
+          <p className={styles.page.subtitle}>
             {feedbacks.length} feedback{feedbacks.length > 1 ? "s" : ""} •{" "}
             {newCount} nouveau{newCount > 1 ? "x" : ""}
           </p>
         </div>
         <Button
           onClick={() => setIsModalOpen(true)}
-          className="bg-orange-500 hover:bg-orange-600 text-white"
         >
           <Plus className="mr-2 h-4 w-4" />
           Nouveau feedback
@@ -148,7 +150,6 @@ export default function FeedbacksPage() {
           variant={filter === "all" ? "default" : "outline"}
           size="sm"
           onClick={() => setFilter("all")}
-          className={filter === "all" ? "bg-orange-500 hover:bg-orange-600" : ""}
         >
           Tous ({feedbacks.length})
         </Button>
@@ -160,7 +161,6 @@ export default function FeedbacksPage() {
               variant={filter === status ? "default" : "outline"}
               size="sm"
               onClick={() => setFilter(status)}
-              className={filter === status ? "bg-orange-500 hover:bg-orange-600" : ""}
             >
               {feedbackStatusLabels[status]} ({count})
             </Button>
@@ -170,7 +170,7 @@ export default function FeedbacksPage() {
 
       {/* List */}
       {filteredFeedbacks.length === 0 ? (
-        <div className="rounded-lg border border-gray-200 bg-white p-12 text-center dark:border-gray-800 dark:bg-gray-900">
+        <div className={cn(styles.card.flat, "p-12 text-center")}>
           <p className="text-gray-500 dark:text-gray-400">
             Aucun feedback pour le moment
           </p>
@@ -180,7 +180,7 @@ export default function FeedbacksPage() {
           {filteredFeedbacks.map((feedback) => (
             <div
               key={feedback.id}
-              className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900"
+              className={cn(styles.card.flat, "p-4")}
             >
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1">
@@ -246,7 +246,7 @@ export default function FeedbacksPage() {
       {/* Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="mx-4 w-full max-w-md rounded-lg bg-white p-6 shadow-xl dark:bg-gray-900">
+          <div className={cn(styles.card.flat, "mx-4 w-full max-w-md p-6 shadow-xl")}>
             {submitted ? (
               <div className="flex flex-col items-center gap-3 py-8 text-center">
                 <div className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/50">
@@ -284,10 +284,10 @@ export default function FeedbacksPage() {
                         className={`flex flex-1 items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
                           newType === btn.value
                             ? btn.value === "bug"
-                              ? "border-red-300 bg-red-100 text-red-700 dark:border-red-800 dark:bg-red-900/50 dark:text-red-400"
+                              ? cn(colors.feedback.bug.border, colors.feedback.bug.bg, colors.feedback.bug.text)
                               : btn.value === "improvement"
-                              ? "border-amber-300 bg-amber-100 text-amber-700 dark:border-amber-800 dark:bg-amber-900/50 dark:text-amber-400"
-                              : "border-blue-300 bg-blue-100 text-blue-700 dark:border-blue-800 dark:bg-blue-900/50 dark:text-blue-400"
+                              ? cn(colors.feedback.improvement.border, colors.feedback.improvement.bg, colors.feedback.improvement.text)
+                              : cn(colors.feedback.question.border, colors.feedback.question.bg, colors.feedback.question.text)
                             : "border-gray-200 bg-white text-gray-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400 " +
                               btn.color
                         }`}
@@ -309,7 +309,7 @@ export default function FeedbacksPage() {
                     onChange={(e) => setNewMessage(e.target.value)}
                     placeholder="Décris ton feedback..."
                     rows={4}
-                    className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:placeholder:text-gray-500"
+                    className={styles.input.base}
                   />
                 </div>
 
@@ -321,7 +321,6 @@ export default function FeedbacksPage() {
                   <Button
                     onClick={handleSubmit}
                     disabled={!newType || !newMessage.trim()}
-                    className="bg-orange-500 hover:bg-orange-600"
                   >
                     Ajouter
                   </Button>

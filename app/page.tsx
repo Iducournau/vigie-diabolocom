@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import { 
-  AlertTriangle, 
-  AlertCircle, 
-  Info, 
-  CheckCircle2, 
-  RefreshCw, 
+import {
+  AlertTriangle,
+  AlertCircle,
+  Info,
+  CheckCircle2,
+  RefreshCw,
   Loader2,
   ArrowRight,
 } from "lucide-react";
@@ -17,6 +17,16 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { Severity, AlertStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { styles } from "@/lib/styles";
+import { colors } from "@/lib/theme";
+import {
+  RULES_MAP,
+  CAMPAIGNS_MAP,
+  getCampaignName,
+  getRuleInfo,
+  mapStatus,
+  formatTimeAgo,
+} from "@/lib/constants";
 import {
   PieChart,
   Pie,
@@ -31,61 +41,6 @@ import {
   CartesianGrid,
   Legend,
 } from "recharts";
-
-// Mapping des règles
-const RULES_MAP: Record<string, { name: string; severity: Severity }> = {
-  "00097670-06b9-406a-97cc-c8d138448eff": { name: "Lead dormant", severity: "critical" },
-  "23934576-a556-4035-8dc8-2d851a86e02e": { name: "Rappel oublié", severity: "critical" },
-  "59cb9b8e-6916-47f8-898c-c2e18c81f4a6": { name: "Unreachable suspect", severity: "warning" },
-  "7caa90f2-9288-4c80-8d6a-6d3078c6a135": { name: "Clôture trop rapide", severity: "warning" },
-  "c99b95b1-5dd6-48ed-b703-84df70e4eddb": { name: "Acharnement", severity: "info" },
-};
-
-// Mapping des campagnes Admissions (12)
-const CAMPAIGNS_MAP: Record<string, string> = {
-  "5612": "Métiers Animaliers",
-  "5927": "Electricien",
-  "5920": "CAP MIS",
-  "5622": "Campagne Nutritionniste",
-  "5611": "Campagne Mode",
-  "5621": "Décorateur Intérieur",
-  "5580": "Campagne AEPE",
-  "6064": "CA - Titres Professionnels",
-  "6051": "CA - Métiers de la Beauté",
-  "6046": "CA - Métiers de Bouche",
-  "6050": "CA - Céramiste Fleuriste",
-  "6082": "CA - Mode Déco",
-};
-
-// Couleurs pour les charts
-const RULE_COLORS = [
-  "#ef4444", // rouge
-  "#f97316", // orange
-  "#eab308", // jaune
-  "#84cc16", // lime
-  "#3b82f6", // bleu
-];
-
-function getCampaignName(campaignId: string): string {
-  return CAMPAIGNS_MAP[campaignId] || `Campagne ${campaignId}`;
-}
-
-function mapStatus(status: string): AlertStatus {
-  if (status === "open") return "new";
-  return status as AlertStatus;
-}
-
-function formatTimeAgo(date: Date): string {
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMins / 60);
-  const diffDays = Math.floor(diffHours / 24);
-
-  if (diffMins < 60) return `Il y a ${diffMins} min`;
-  if (diffHours < 24) return `Il y a ${diffHours}h`;
-  return `Il y a ${diffDays}j`;
-}
 
 interface DashboardStats {
   total: number;
@@ -124,9 +79,9 @@ interface ChartData {
 // Composant Donut Chart - Répartition par type (avec total au centre)
 function AlertsByTypeChart({ data }: { data: { name: string; value: number; color: string }[] }) {
   const total = useMemo(() => data.reduce((sum, item) => sum + item.value, 0), [data]);
-  
+
   return (
-    <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 shadow-sm p-4 h-full flex flex-col">
+    <div className={cn(styles.card.base, "p-4 h-full flex flex-col")}>
       <h3 className="font-medium text-gray-900 dark:text-gray-100 mb-4">Répartition par type</h3>
       <div className="flex-1 min-h-[250px]">
         <ResponsiveContainer width="100%" height="100%">
@@ -175,9 +130,9 @@ function AlertsByTypeChart({ data }: { data: { name: string; value: number; colo
                 }}
               />
             </Pie>
-            <Tooltip 
+            <Tooltip
               formatter={(value: number) => [value, "Alertes"]}
-              contentStyle={{ 
+              contentStyle={{
                 backgroundColor: 'rgba(255, 255, 255, 0.95)',
                 borderRadius: '8px',
                 border: '1px solid #e5e7eb'
@@ -190,8 +145,8 @@ function AlertsByTypeChart({ data }: { data: { name: string; value: number; colo
       <div className="mt-2 space-y-1">
         {data.map((item, index) => (
           <div key={index} className="flex items-center gap-2 text-xs">
-            <span 
-              className="w-2.5 h-2.5 rounded-full shrink-0" 
+            <span
+              className="w-2.5 h-2.5 rounded-full shrink-0"
               style={{ backgroundColor: item.color }}
             />
             <span className="text-gray-600 dark:text-gray-400 truncate flex-1">{item.name}</span>
@@ -220,15 +175,15 @@ function AlertsByCampaignChart({ data }: { data: CampaignSeverityData[] }) {
     .slice(0, 6);
 
   // Custom tooltip
-  const CustomTooltip = ({ active, payload, label }: any) => {
+  const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ value: number; name: string; fill: string }>; label?: string }) => {
     if (active && payload && payload.length) {
       const item = sortedData.find(d => d.shortName === label);
-      const total = payload.reduce((sum: number, p: any) => sum + (p.value || 0), 0);
+      const total = payload.reduce((sum, p) => sum + (p.value || 0), 0);
       return (
-        <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700">
+        <div className={styles.tooltip.container}>
           <p className="font-medium text-gray-900 dark:text-gray-100 mb-2">{item?.name || label}</p>
           <div className="space-y-1 text-sm">
-            {payload.filter((p: any) => p.value > 0).map((p: any, i: number) => (
+            {payload.filter((p) => p.value > 0).map((p, i) => (
               <div key={i} className="flex items-center justify-between gap-4">
                 <span className="flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full" style={{ backgroundColor: p.fill }} />
@@ -249,18 +204,18 @@ function AlertsByCampaignChart({ data }: { data: CampaignSeverityData[] }) {
   };
 
   // Custom bar shape avec radius intelligent
-  const RoundedBar = (props: any) => {
-    const { x, y, width, height, fill, dataKey, payload } = props;
-    if (!height || height <= 0) return null;
+  const RoundedBar = (props: { x?: number; y?: number; width?: number; height?: number; fill?: string; dataKey?: string; payload?: CampaignSeverityData }) => {
+    const { x = 0, y = 0, width = 0, height = 0, fill, dataKey, payload } = props;
+    if (!height || height <= 0 || !payload) return null;
 
     // Déterminer si c'est la barre du haut (pour le radius top)
-    const isTopBar = 
+    const isTopBar =
       (dataKey === "info" && payload.info > 0) ||
       (dataKey === "warning" && payload.info === 0 && payload.warning > 0) ||
       (dataKey === "critical" && payload.info === 0 && payload.warning === 0);
 
     // Déterminer si c'est la barre du bas (pour le radius bottom)
-    const isBottomBar = 
+    const isBottomBar =
       (dataKey === "critical" && payload.critical > 0) ||
       (dataKey === "warning" && payload.critical === 0 && payload.warning > 0) ||
       (dataKey === "info" && payload.critical === 0 && payload.warning === 0);
@@ -287,9 +242,9 @@ function AlertsByCampaignChart({ data }: { data: CampaignSeverityData[] }) {
       />
     );
   };
-  
+
   return (
-    <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 shadow-sm p-4 h-full flex flex-col">
+    <div className={cn(styles.card.base, "p-4 h-full flex flex-col")}>
       <h3 className="font-medium text-gray-900 dark:text-gray-100 mb-4">Alertes par formation</h3>
       <div className="flex-1 min-h-[250px]">
         <ResponsiveContainer width="100%" height="100%">
@@ -298,48 +253,48 @@ function AlertsByCampaignChart({ data }: { data: CampaignSeverityData[] }) {
             margin={{ top: 10, right: 10, left: -10, bottom: 5 }}
           >
             <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="#e5e7eb" />
-            <XAxis 
-              dataKey="shortName" 
+            <XAxis
+              dataKey="shortName"
               tickLine={false}
               axisLine={false}
               tick={{ fontSize: 10, fill: '#6b7280' }}
               tickMargin={8}
             />
-            <YAxis 
+            <YAxis
               tickLine={false}
               axisLine={false}
               tick={{ fontSize: 10, fill: '#6b7280' }}
               width={30}
             />
             <Tooltip content={<CustomTooltip />} cursor={false} />
-            <Legend 
+            <Legend
               verticalAlign="bottom"
               height={36}
               iconType="circle"
               iconSize={8}
               formatter={(value) => <span className="text-xs text-gray-600 dark:text-gray-400">{value}</span>}
             />
-            <Bar 
-              dataKey="critical" 
+            <Bar
+              dataKey="critical"
               name="Critique"
               stackId="stack"
-              fill="#ef4444" 
+              fill={colors.chart.critical}
               shape={<RoundedBar />}
               maxBarSize={45}
             />
-            <Bar 
-              dataKey="warning" 
+            <Bar
+              dataKey="warning"
               name="Attention"
               stackId="stack"
-              fill="#f59e0b" 
+              fill={colors.chart.warning}
               shape={<RoundedBar />}
               maxBarSize={45}
             />
-            <Bar 
-              dataKey="info" 
+            <Bar
+              dataKey="info"
               name="Info"
               stackId="stack"
-              fill="#3b82f6" 
+              fill={colors.chart.info}
               shape={<RoundedBar />}
               maxBarSize={45}
             />
@@ -353,9 +308,9 @@ function AlertsByCampaignChart({ data }: { data: CampaignSeverityData[] }) {
 // Composant Activité récente
 function RecentActivityFeed({ alerts }: { alerts: AlertRow[] }) {
   const recentAlerts = alerts.slice(0, 8);
-  
+
   return (
-    <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 shadow-sm h-full flex flex-col">
+    <div className={cn(styles.card.base, "h-full flex flex-col")}>
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-800">
         <h3 className="font-medium text-gray-900 dark:text-gray-100">Activité récente</h3>
       </div>
@@ -368,8 +323,7 @@ function RecentActivityFeed({ alerts }: { alerts: AlertRow[] }) {
                   <div className="flex items-start gap-3">
                     <div className={cn(
                       "w-2 h-2 rounded-full mt-1.5 shrink-0",
-                      alert.severity === "critical" ? "bg-red-500" :
-                      alert.severity === "warning" ? "bg-amber-500" : "bg-blue-500"
+                      colors.severity[alert.severity].dot
                     )} />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-2">
@@ -398,7 +352,7 @@ function RecentActivityFeed({ alerts }: { alerts: AlertRow[] }) {
       </div>
       <div className="px-4 py-3 border-t border-gray-200 dark:border-gray-800">
         <Link href="/alerts">
-          <Button variant="outline" size="sm" className="w-full">
+          <Button size="sm" className="w-full">
             Voir toutes les alertes
             <ArrowRight className="ml-2 h-4 w-4" />
           </Button>
@@ -429,23 +383,19 @@ export default function DashboardPage() {
     const campaignSeverity: Record<string, { critical: number; warning: number; info: number }> = {};
 
     (openAlerts || []).forEach((alert) => {
-      const ruleInfo = RULES_MAP[alert.rule_id];
-      if (ruleInfo) {
-        if (ruleInfo.severity === "critical") critical++;
-        else if (ruleInfo.severity === "warning") warning++;
-        else if (ruleInfo.severity === "info") info++;
-        
-        typeCount[alert.rule_id] = (typeCount[alert.rule_id] || 0) + 1;
-      }
-      
+      const ruleInfo = getRuleInfo(alert.rule_id);
+      if (ruleInfo.severity === "critical") critical++;
+      else if (ruleInfo.severity === "warning") warning++;
+      else if (ruleInfo.severity === "info") info++;
+
+      typeCount[alert.rule_id] = (typeCount[alert.rule_id] || 0) + 1;
+
       // Compter par campagne ET par sévérité
       if (alert.campaign) {
         if (!campaignSeverity[alert.campaign]) {
           campaignSeverity[alert.campaign] = { critical: 0, warning: 0, info: 0 };
         }
-        if (ruleInfo) {
-          campaignSeverity[alert.campaign][ruleInfo.severity]++;
-        }
+        campaignSeverity[alert.campaign][ruleInfo.severity]++;
       }
     });
 
@@ -453,9 +403,9 @@ export default function DashboardPage() {
 
     // Préparer les données pour les charts
     const byType = Object.entries(typeCount).map(([ruleId, count], index) => ({
-      name: RULES_MAP[ruleId]?.name || "Inconnu",
+      name: getRuleInfo(ruleId).name,
       value: count,
-      color: RULE_COLORS[index % RULE_COLORS.length],
+      color: colors.chart.series[index % colors.chart.series.length],
     }));
 
     // Données pour le stacked bar chart
@@ -481,7 +431,7 @@ export default function DashboardPage() {
     // Compter résolues (dernières 24h)
     const yesterday = new Date();
     yesterday.setHours(yesterday.getHours() - 24);
-    
+
     const { count: resolvedCount } = await supabase
       .from("alerts")
       .select("*", { count: "exact", head: true })
@@ -504,9 +454,9 @@ export default function DashboardPage() {
       .limit(10);
 
     const transformedRecent: AlertRow[] = (recentData || []).map((data) => {
-      const ruleInfo = RULES_MAP[data.rule_id] || { name: "Règle inconnue", severity: "info" as Severity };
+      const ruleInfo = getRuleInfo(data.rule_id);
       const alertData = typeof data.alert_data === "string" ? JSON.parse(data.alert_data) : data.alert_data || {};
-      
+
       return {
         id: data.id,
         ruleId: data.rule_id,
@@ -538,8 +488,8 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+      <div className={styles.loading.wrapper}>
+        <Loader2 className={styles.loading.spinner} />
       </div>
     );
   }
@@ -549,8 +499,8 @@ export default function DashboardPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">Tableau de bord</h1>
-          <p className="text-gray-500 dark:text-gray-400 mt-1 text-sm">
+          <h1 className={styles.page.title}>Tableau de bord</h1>
+          <p className={styles.page.subtitle}>
             Surveillance des anomalies en temps réel
           </p>
         </div>
@@ -561,7 +511,7 @@ export default function DashboardPage() {
               <span className="ml-2 inline-block w-2 h-2 rounded-full bg-emerald-500" />
             </div>
           )}
-          <Button variant="outline" size="sm" onClick={handleRefresh} disabled={refreshing}>
+          <Button onClick={handleRefresh} disabled={refreshing}>
             <RefreshCw className={cn("h-4 w-4 mr-2", refreshing && "animate-spin")} />
             Rafraîchir
           </Button>

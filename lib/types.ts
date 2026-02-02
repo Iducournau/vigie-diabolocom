@@ -2,7 +2,7 @@
 
 export type Severity = "critical" | "warning" | "info";
 
-export type AlertStatus = "new" | "acknowledged" | "resolved" | "ignored";
+export type AlertStatus = "new" | "acknowledged" | "resolved" | "ignored" | "dismissed";
 
 export type RuleLogicType =
   | "lead_not_called"
