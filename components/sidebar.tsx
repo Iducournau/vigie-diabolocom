@@ -21,7 +21,7 @@ const navigation = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
   { name: "Alertes", href: "/alerts", icon: AlertTriangle },
   { name: "Règles", href: "/rules", icon: ScrollText },
-  { name: "Logs", href: "/logs", icon: Settings },
+  { name: "Logs", href: "/logs", icon: Settings, disabled: true, badge: "V2" },
   { name: "Feedbacks", href: "/feedbacks", icon: MessageSquare },
 ];
 
@@ -66,6 +66,32 @@ export function Sidebar() {
       <nav className="flex-1 space-y-1 p-2">
         {navigation.map((item) => {
           const isActive = pathname === item.href;
+
+          // Item désactivé (V2)
+          if (item.disabled) {
+            return (
+              <div
+                key={item.name}
+                className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium cursor-not-allowed text-gray-400 dark:text-gray-600 ${
+                  collapsed ? "justify-center px-2" : ""
+                }`}
+                title={collapsed ? `${item.name} (${item.badge})` : undefined}
+              >
+                <item.icon className="h-5 w-5 shrink-0" />
+                {!collapsed && (
+                  <span className="flex items-center gap-2">
+                    {item.name}
+                    {item.badge && (
+                      <span className="text-xs text-gray-400 dark:text-gray-500">
+                        ({item.badge})
+                      </span>
+                    )}
+                  </span>
+                )}
+              </div>
+            );
+          }
+
           return (
             <Link
               key={item.name}
