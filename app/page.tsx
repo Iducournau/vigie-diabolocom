@@ -13,6 +13,7 @@ import {
 import { StatsCard } from "@/components/stats-card";
 import { AlertsChart } from "@/components/alerts-chart";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { Severity, AlertStatus } from "@/lib/types";
@@ -488,9 +489,21 @@ export default function DashboardPage() {
   async function handleRefresh() {
     setRefreshing(true);
     try {
+      // Appeler le webhook n8n pour rafraîchir les alertes
+      const response = await fetch("https://n8n.vps.youschool.fr/webhook/refresh-alerts", {
+        method: "GET",
+      });
+
+      if (!response.ok) {
+        throw new Error(`Erreur webhook: ${response.status}`);
+      }
+
+      // Recharger les données
       await fetchDashboardData();
+      toast.success("Alertes rafraîchies");
     } catch (error) {
       console.error("Erreur lors du rafraîchissement:", error);
+      toast.error("Erreur lors du rafraîchissement des alertes");
       setRefreshing(false);
     }
   }

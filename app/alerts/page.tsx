@@ -32,6 +32,7 @@ import {
   Settings2,
   CheckIcon,
   PlusCircle,
+  RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -616,6 +617,7 @@ const columns: ColumnDef<AlertRow>[] = [
 export default function AlertsPage() {
   const [data, setData] = useState<AlertRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [sorting, setSorting] = useState<SortingState>([
     { id: "detectedAt", desc: true },
   ]);
@@ -840,6 +842,28 @@ export default function AlertsPage() {
     }
   }
 
+  // Rafraîchir les alertes via webhook n8n
+  async function handleRefresh() {
+    setRefreshing(true);
+    try {
+      const response = await fetch("https://n8n.vps.youschool.fr/webhook/refresh-alerts", {
+        method: "GET",
+      });
+
+      if (!response.ok) {
+        throw new Error(`Erreur webhook: ${response.status}`);
+      }
+
+      await fetchAlerts();
+      toast.success("Alertes rafraîchies");
+    } catch (error) {
+      console.error("Erreur lors du rafraîchissement:", error);
+      toast.error("Erreur lors du rafraîchissement des alertes");
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
   const selectedCount = table.getFilteredSelectedRowModel().rows.length;
 
   if (loading) {
@@ -853,11 +877,26 @@ export default function AlertsPage() {
   return (
     <div className="flex flex-col gap-4">
       {/* Header */}
-      <div className="flex flex-col gap-1">
-        <h2 className="text-2xl font-semibold tracking-tight">Alertes</h2>
-        <p className="text-muted-foreground">
-          Gérez les anomalies détectées par Vigie
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-semibold tracking-tight">Alertes</h2>
+          <p className="text-muted-foreground">
+            Gérez les anomalies détectées par Vigie
+          </p>
+        </div>
+        <Button onClick={handleRefresh} disabled={refreshing}>
+          {refreshing ? (
+            <>
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              Chargement...
+            </>
+          ) : (
+            <>
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Rafraîchir
+            </>
+          )}
+        </Button>
       </div>
 
       {/* Toolbar */}
