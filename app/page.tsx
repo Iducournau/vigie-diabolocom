@@ -372,10 +372,14 @@ export default function DashboardPage() {
 
   async function fetchDashboardData() {
     // Fetch toutes les alertes ouvertes pour les stats
-    const { data: openAlerts } = await supabase
+    const { data: openAlerts, error: openError } = await supabase
       .from("alerts")
       .select("*")
       .in("status", ["open", "acknowledged"]);
+
+    if (openError) {
+      console.error("Erreur fetch alertes ouvertes:", openError);
+    }
 
     // Compter par sévérité
     let critical = 0, warning = 0, info = 0;

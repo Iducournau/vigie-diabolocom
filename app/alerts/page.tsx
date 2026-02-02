@@ -36,6 +36,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -573,8 +574,9 @@ const columns: ColumnDef<AlertRow>[] = [
   },
   {
     id: "actions",
-    cell: ({ row }) => {
+    cell: ({ row, table }) => {
       const alert = row.original;
+      const meta = table.options.meta as { onAction?: (id: string, action: string) => void } | undefined;
       return (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -596,11 +598,11 @@ const columns: ColumnDef<AlertRow>[] = [
               </Link>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={() => meta?.onAction?.(alert.id, "resolved")}>
               <CheckCircle2 className="size-4" />
               Résoudre
             </DropdownMenuItem>
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={() => meta?.onAction?.(alert.id, "ignored")}>
               <XCircle className="size-4" />
               Ignorer
             </DropdownMenuItem>
@@ -638,46 +640,57 @@ export default function AlertsPage() {
   const [campaignFilter, setCampaignFilter] = useState<Set<string>>(new Set());
 
   async function fetchAlerts() {
-    const { data: alertsData } = await supabase
-      .from("alerts")
-      .select("*")
-      .order("detected_at", { ascending: false })
-      .limit(500);
+    try {
+      const { data: alertsData, error } = await supabase
+        .from("alerts")
+        .select("*")
+        .order("detected_at", { ascending: false })
+        .limit(500);
 
-    const transformed: AlertRow[] = (alertsData || []).map((data) => {
-      const ruleInfo = getRuleInfo(data.rule_id);
-      const alertData =
-        typeof data.alert_data === "string"
-          ? JSON.parse(data.alert_data)
-          : data.alert_data || {};
+      if (error) {
+        console.error("Erreur fetch alertes:", error);
+        setLoading(false);
+        return;
+      }
 
-      return {
-        id: data.id,
-        ruleId: data.rule_id,
-        ruleName: ruleInfo.name,
-        severity: ruleInfo.severity,
-        status: mapStatus(data.status),
-        leadId: data.lead_id,
-        campaign: getCampaignName(data.campaign),
-        campaignId: data.campaign,
-        detectedAt: new Date(data.detected_at),
-        agent: alertData.agent || alertData.user_login1 || alertData.user_login,
-        // Colonnes dynamiques depuis alert_data
-        lastCall: alertData.last_call || alertData.call_start
-          ? new Date(alertData.last_call || alertData.call_start)
-          : undefined,
-        wrapup: alertData.wrapup || alertData.wrapup_name,
-        talkDuration: alertData.talk_duration,
-        tryNumber: alertData.try_number,
-        callCount: alertData.call_count || alertData.total_calls,
-        wrapupList: alertData.wrapup_list,
-        retryDate: alertData.retry_date ? new Date(alertData.retry_date) : undefined,
-        delayHours: alertData.delay_hours || alertData.hours_since_retry,
-      };
-    });
+      const transformed: AlertRow[] = (alertsData || []).map((data) => {
+        const ruleInfo = getRuleInfo(data.rule_id);
+        const alertData =
+          typeof data.alert_data === "string"
+            ? JSON.parse(data.alert_data)
+            : data.alert_data || {};
 
-    setData(transformed);
-    setLoading(false);
+        return {
+          id: data.id,
+          ruleId: data.rule_id,
+          ruleName: ruleInfo.name,
+          severity: ruleInfo.severity,
+          status: mapStatus(data.status),
+          leadId: data.lead_id,
+          campaign: getCampaignName(data.campaign),
+          campaignId: data.campaign,
+          detectedAt: new Date(data.detected_at),
+          agent: alertData.user_login1 || alertData.user_login || alertData.agent || alertData.lastUpdatedBy,
+          // Colonnes dynamiques depuis alert_data
+          lastCall: alertData.last_call || alertData.call_start
+            ? new Date(alertData.last_call || alertData.call_start)
+            : undefined,
+          wrapup: alertData.wrapup || alertData.wrapup_name,
+          talkDuration: alertData.talk_duration,
+          tryNumber: alertData.try_number,
+          callCount: alertData.call_count || alertData.total_calls,
+          wrapupList: alertData.wrapup_list,
+          retryDate: alertData.retry_date ? new Date(alertData.retry_date) : undefined,
+          delayHours: alertData.delay_hours || alertData.hours_since_retry,
+        };
+      });
+
+      setData(transformed);
+      setLoading(false);
+    } catch (err) {
+      console.error("Erreur fetch alertes:", err);
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
@@ -751,6 +764,9 @@ export default function AlertsPage() {
         pageSize: 20,
       },
     },
+    meta: {
+      onAction: handleSingleAction,
+    },
   });
 
   const hasActiveFilters =
@@ -766,6 +782,62 @@ export default function AlertsPage() {
     setRuleFilter(new Set());
     setCampaignFilter(new Set());
     setGlobalFilter("");
+  }
+
+  // Mise à jour du statut d'une alerte
+  async function updateAlertStatus(alertId: string, newStatus: string) {
+    const updateData: Record<string, unknown> = { status: newStatus };
+    if (newStatus === "resolved") {
+      updateData.resolved_at = new Date().toISOString();
+      updateData.resolved_by = "Utilisateur";
+    }
+
+    const { error } = await supabase
+      .from("alerts")
+      .update(updateData)
+      .eq("id", alertId);
+
+    if (error) {
+      console.error("Erreur mise à jour:", error);
+      return false;
+    }
+    return true;
+  }
+
+  // Actions de masse
+  async function handleBulkAction(action: "resolved" | "ignored") {
+    const selectedRows = table.getFilteredSelectedRowModel().rows;
+    if (selectedRows.length === 0) return;
+
+    const promises = selectedRows.map((row) =>
+      updateAlertStatus(row.original.id, action)
+    );
+
+    const results = await Promise.all(promises);
+    const successCount = results.filter(Boolean).length;
+
+    if (successCount > 0) {
+      toast.success(
+        action === "resolved"
+          ? `${successCount} alerte(s) résolue(s)`
+          : `${successCount} alerte(s) ignorée(s)`
+      );
+      table.resetRowSelection();
+      fetchAlerts();
+    } else {
+      toast.error("Erreur lors de la mise à jour");
+    }
+  }
+
+  // Action individuelle
+  async function handleSingleAction(alertId: string, action: "resolved" | "ignored") {
+    const success = await updateAlertStatus(alertId, action);
+    if (success) {
+      toast.success(action === "resolved" ? "Alerte résolue" : "Alerte ignorée");
+      fetchAlerts();
+    } else {
+      toast.error("Erreur lors de la mise à jour");
+    }
   }
 
   const selectedCount = table.getFilteredSelectedRowModel().rows.length;
@@ -888,11 +960,11 @@ export default function AlertsPage() {
             <span className="text-sm text-muted-foreground">
               {selectedCount} sélectionnée{selectedCount > 1 ? "s" : ""}
             </span>
-            <Button variant="outline" size="sm">
+            <Button variant="outline" size="sm" onClick={() => handleBulkAction("resolved")}>
               <CheckCircle2 className="size-4" />
               Résoudre
             </Button>
-            <Button variant="outline" size="sm">
+            <Button variant="outline" size="sm" onClick={() => handleBulkAction("ignored")}>
               <XCircle className="size-4" />
               Ignorer
             </Button>

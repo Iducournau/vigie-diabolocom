@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { SeverityBadge } from "@/components/alert-badge";
 import { Switch } from "@/components/ui/switch";
 import { Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import { Severity } from "@/lib/types";
 import { styles } from "@/lib/styles";
 import { RULES_MAP, getRuleInfo } from "@/lib/constants";
@@ -153,6 +154,7 @@ export default function RulesPage() {
 
     if (error) {
       console.error("Erreur mise à jour:", error);
+      toast.error("Erreur lors de la mise à jour");
       setUpdating(null);
       return;
     }
@@ -164,6 +166,7 @@ export default function RulesPage() {
       )
     );
 
+    toast.success(currentState ? "Règle désactivée" : "Règle activée");
     setUpdating(null);
   }
 

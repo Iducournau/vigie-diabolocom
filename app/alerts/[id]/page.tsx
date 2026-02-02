@@ -22,6 +22,16 @@ import {
   Calendar,
   AlertCircle,
 } from "lucide-react";
+import {
+  RULES_MAP,
+  getRuleInfo,
+  getCampaignName,
+  ACTION_LABELS,
+  mapStatus,
+  formatTimeAgo,
+  formatDateTime,
+  formatPhone,
+} from "@/lib/constants";
 
 // Types
 interface HistoryEntry {
@@ -49,128 +59,13 @@ interface AlertData {
   [key: string]: unknown;
 }
 
-// Mapping des règles
-const RULES_MAP: Record<string, { name: string; severity: Severity; description: string }> = {
-  "00097670-06b9-406a-97cc-c8d138448eff": { 
-    name: "Lead dormant", 
-    severity: "critical",
-    description: "Lead sans activité depuis plus de 72h malgré une priorité haute"
-  },
-  "23934576-a556-4035-8dc8-2d851a86e02e": { 
-    name: "Rappel oublié", 
-    severity: "critical",
-    description: "Rappel programmé non effectué dans les délais"
-  },
-  "59cb9b8e-6916-47f8-898c-c2e18c81f4a6": { 
-    name: "Unreachable suspect", 
-    severity: "warning",
-    description: "Clôture Répondeur mais avec une durée de conversation > 30s"
-  },
-  "7caa90f2-9288-4c80-8d6a-6d3078c6a135": { 
-    name: "Clôture trop rapide", 
-    severity: "warning",
-    description: "Appel clôturé en moins de 30 secondes"
-  },
-  "c99b95b1-5dd6-48ed-b703-84df70e4eddb": { 
-    name: "Acharnement", 
-    severity: "info",
-    description: " Lead appelé plus de 10 fois en 7 jours."
-  },
-};
-
-// Mapping des campagnes
-const CAMPAIGNS_MAP: Record<string, string> = {
-  "5927": "Electricien",
-  "3389": "CPF : Relances CPF",
-  "2602": "Coaching 2",
-  "2603": "Coaching 3",
-  "5659": "Coaching SKETCHUP",
-  "6083": "CA - Elec MIT MIS",
-  "5671": "Coaching CFA",
-  "4118": "Coaching 1 : nouveaux inscrits",
-  "5920": "CAP MIS",
-  "6067": "CA - Excel et Formateur",
-  "6082": "CA - Mode Déco",
-  "6064": "CA - Titres Professionnels",
-  "6050": "CA - Céramiste Fleuriste",
-  "6051": "CA - Métiers de la Beauté",
-  "6046": "CA - Métiers de Bouche",
-  "3148": "Campagne A",
-  "5571": "Test - Conseiller Fleuriste2",
-  "6016": "CRE : leads autonomes",
-  "5582": "CRE",
-  "5921": "CAP MIT",
-  "5611": "Campagne Mode",
-  "5622": "Campagne Nutritionniste",
-  "5621": "Décorateur Intérieur",
-  "5612": "Métiers Animaliers",
-  "5580": "Campagne AEPE",
-  "5617": "Admin apprentissage",
-  "5600": "Tiers Financement",
-  "5520": "Recouvrement",
-  "5534": "Recouvrement v2 test",
-  "5667": "Resiliation",
-  "3512": "CONTENTIEUX",
-  "3511": "COMPTA",
-  "3510": "ACCORD NON RESPECTÉ",
-};
-
-// Mapping des états
+// Mapping des états Diabolocom
 const STATE_LABELS: Record<string, string> = {
   "processing_not_in_progress": "En attente de traitement",
   "processing_in_progress": "En cours de traitement",
   "processed": "Traité",
   "excluded": "Exclu",
 };
-
-// Mapping des actions pour l'affichage
-const ACTION_LABELS: Record<string, string> = {
-  acknowledged: "Prise en charge",
-  resolved: "Marquée résolue",
-  ignored: "Ignorée",
-  reopened: "Réouverte",
-};
-
-function getCampaignName(campaignId: string): string {
-  return CAMPAIGNS_MAP[campaignId] || `Campagne ${campaignId}`;
-}
-
-function mapStatus(status: string): AlertStatus {
-  if (status === "open") return "new";
-  return status as AlertStatus;
-}
-
-function formatTimeAgo(date: Date): string {
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMins / 60);
-  const diffDays = Math.floor(diffHours / 24);
-
-  if (diffMins < 60) return `Il y a ${diffMins} min`;
-  if (diffHours < 24) return `Il y a ${diffHours}h`;
-  return `Il y a ${diffDays}j`;
-}
-
-function formatDate(dateString: string): string {
-  const date = new Date(dateString);
-  return date.toLocaleDateString("fr-FR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-function formatPhone(phone: string): string {
-  if (!phone) return "";
-  if (phone.startsWith("33")) {
-    const digits = phone.slice(2);
-    return `+33 ${digits.slice(0, 1)} ${digits.slice(1, 3)} ${digits.slice(3, 5)} ${digits.slice(5, 7)} ${digits.slice(7, 9)}`;
-  }
-  return phone;
-}
 
 function getStatusColor(status: string): string {
   switch (status) {
@@ -222,11 +117,7 @@ export default function AlertDetailPage() {
       ? JSON.parse(data.alert_data) 
       : data.alert_data || {};
 
-    const ruleInfo = RULES_MAP[data.rule_id] || { 
-      name: "Règle inconnue", 
-      severity: "info" as Severity,
-      description: ""
-    };
+    const ruleInfo = getRuleInfo(data.rule_id);
 
     const createdAt = new Date(alertData.createdAt || data.detected_at);
     const now = new Date();
@@ -356,7 +247,7 @@ export default function AlertDetailPage() {
     );
   }
 
-  const ruleInfo = RULES_MAP[alert.ruleId];
+  const ruleInfo = getRuleInfo(alert.ruleId);
 
   return (
     <div className="space-y-6">
@@ -436,9 +327,9 @@ export default function AlertDetailPage() {
             </Button>
           )}
           <Button variant="outline" size="sm" asChild>
-            <a 
-              href={`https://youschool.diabolocom.com/desk/contacts/${alert.leadId}`} 
-              target="_blank" 
+            <a
+              href={`https://youschool.diabolocom.com/desk/campaign-contacts/${alert.leadId}`}
+              target="_blank"
               rel="noopener noreferrer"
             >
               <ExternalLink className="h-4 w-4 mr-2" />
@@ -494,7 +385,7 @@ export default function AlertDetailPage() {
                   </div>
                   <div>
                     <p className="text-xs text-gray-500 dark:text-gray-400">Créé le</p>
-                    <p className="font-medium text-gray-900 dark:text-gray-100">{formatDate(alert.data.createdAt)}</p>
+                    <p className="font-medium text-gray-900 dark:text-gray-100">{formatDateTime(alert.data.createdAt)}</p>
                   </div>
                 </div>
               )}
