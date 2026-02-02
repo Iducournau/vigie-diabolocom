@@ -483,7 +483,12 @@ export default function DashboardPage() {
 
   async function handleRefresh() {
     setRefreshing(true);
-    await fetchDashboardData();
+    try {
+      await fetchDashboardData();
+    } catch (error) {
+      console.error("Erreur lors du rafraîchissement:", error);
+      setRefreshing(false);
+    }
   }
 
   if (loading) {
@@ -512,8 +517,17 @@ export default function DashboardPage() {
             </div>
           )}
           <Button onClick={handleRefresh} disabled={refreshing}>
-            <RefreshCw className={cn("h-4 w-4 mr-2", refreshing && "animate-spin")} />
-            Rafraîchir
+            {refreshing ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Chargement...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Rafraîchir
+              </>
+            )}
           </Button>
         </div>
       </div>
