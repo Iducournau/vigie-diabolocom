@@ -86,10 +86,12 @@ import { styles } from "@/lib/styles";
 import {
   RULES_MAP,
   CAMPAIGNS_MAP,
+  LEAD_SOURCES,
   getCampaignName,
   getRuleInfo,
   mapStatus,
   formatTimeAgo,
+  getLeadSourceInfo,
 } from "@/lib/constants";
 
 // Types
@@ -104,6 +106,7 @@ interface AlertRow {
   campaignId: string;
   detectedAt: Date;
   agent?: string;
+  leadSource?: string;
   // Colonnes dynamiques (depuis alert_data)
   lastCall?: Date;
   wrapup?: string;
@@ -139,12 +142,18 @@ const campaignOptions = Object.entries(CAMPAIGNS_MAP).map(([id, name]) => ({
   value: id,
 }));
 
+const sourceOptions = Object.entries(LEAD_SOURCES).map(([key, info]) => ({
+  label: info.label,
+  value: key,
+}));
+
 // Labels des colonnes pour le bouton View
 const columnLabels: Record<string, string> = {
   leadId: "Lead",
   ruleName: "Règle",
   status: "Statut",
   campaign: "Formation",
+  leadSource: "Source",
   agent: "Agent",
   detectedAt: "Détecté",
   lastCall: "Dernier appel",
@@ -440,6 +449,22 @@ const columns: ColumnDef<AlertRow>[] = [
     ),
   },
   {
+    accessorKey: "leadSource",
+    header: () => <span className="text-sm font-medium">Source</span>,
+    cell: ({ row }) => {
+      const source = row.getValue("leadSource") as string | undefined;
+      const sourceInfo = getLeadSourceInfo(source);
+      return (
+        <div className="flex items-center gap-1.5">
+          <span className="text-sm">{sourceInfo.icon}</span>
+          <span className="text-xs text-muted-foreground max-w-[100px] truncate">
+            {sourceInfo.label}
+          </span>
+        </div>
+      );
+    },
+  },
+  {
     accessorKey: "agent",
     header: () => <span className="text-sm font-medium">Agent</span>,
     cell: ({ row }) => (
@@ -640,6 +665,7 @@ export default function AlertsPage() {
   const [statusFilter, setStatusFilter] = useState<Set<string>>(new Set());
   const [ruleFilter, setRuleFilter] = useState<Set<string>>(new Set());
   const [campaignFilter, setCampaignFilter] = useState<Set<string>>(new Set());
+  const [sourceFilter, setSourceFilter] = useState<Set<string>>(new Set());
 
   async function fetchAlerts() {
     try {
@@ -657,10 +683,17 @@ export default function AlertsPage() {
 
       const transformed: AlertRow[] = (alertsData || []).map((data) => {
         const ruleInfo = getRuleInfo(data.rule_id);
-        const alertData =
-          typeof data.alert_data === "string"
-            ? JSON.parse(data.alert_data)
-            : data.alert_data || {};
+        let alertData: any = {};
+        if (typeof data.alert_data === "string") {
+          try {
+            alertData = JSON.parse(data.alert_data);
+          } catch (e) {
+            console.error(`Failed to parse alert_data for alert ${data.id}:`, e);
+            alertData = {};
+          }
+        } else {
+          alertData = data.alert_data || {};
+        }
 
         return {
           id: data.id,
@@ -672,7 +705,8 @@ export default function AlertsPage() {
           campaign: getCampaignName(data.campaign),
           campaignId: data.campaign,
           detectedAt: new Date(data.detected_at),
-          agent: alertData.user_login1 || alertData.user_login || alertData.agent || alertData.lastUpdatedBy,
+          agent: alertData.user_login1 || alertData.user_login || alertData.agent || alertData.lastUpdatedBy || data.agent_name,
+          leadSource: data.lead_source || undefined,
           // Colonnes dynamiques depuis alert_data
           lastCall: alertData.last_call || alertData.call_start
             ? new Date(alertData.last_call || alertData.call_start)
@@ -709,6 +743,11 @@ export default function AlertsPage() {
       if (ruleFilter.size > 0 && !ruleFilter.has(alert.ruleId)) return false;
       if (campaignFilter.size > 0 && !campaignFilter.has(alert.campaignId))
         return false;
+      if (sourceFilter.size > 0) {
+        // Si pas de source, on considère que c'est "unknown"
+        const source = alert.leadSource || "unknown";
+        if (!sourceFilter.has(source)) return false;
+      }
       if (globalFilter) {
         const search = globalFilter.toLowerCase();
         return (
@@ -726,6 +765,7 @@ export default function AlertsPage() {
     statusFilter,
     ruleFilter,
     campaignFilter,
+    sourceFilter,
     globalFilter,
   ]);
 
@@ -776,6 +816,7 @@ export default function AlertsPage() {
     statusFilter.size > 0 ||
     ruleFilter.size > 0 ||
     campaignFilter.size > 0 ||
+    sourceFilter.size > 0 ||
     globalFilter !== "";
 
   function clearFilters() {
@@ -783,6 +824,7 @@ export default function AlertsPage() {
     setStatusFilter(new Set());
     setRuleFilter(new Set());
     setCampaignFilter(new Set());
+    setSourceFilter(new Set());
     setGlobalFilter("");
   }
 
@@ -937,6 +979,12 @@ export default function AlertsPage() {
               options={campaignOptions}
               selectedValues={campaignFilter}
               onSelectionChange={setCampaignFilter}
+            />
+            <FacetedFilter
+              title="Source"
+              options={sourceOptions}
+              selectedValues={sourceFilter}
+              onSelectionChange={setSourceFilter}
             />
 
             {hasActiveFilters && (

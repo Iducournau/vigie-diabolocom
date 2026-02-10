@@ -460,7 +460,17 @@ export default function DashboardPage() {
 
     const transformedRecent: AlertRow[] = (recentData || []).map((data) => {
       const ruleInfo = getRuleInfo(data.rule_id);
-      const alertData = typeof data.alert_data === "string" ? JSON.parse(data.alert_data) : data.alert_data || {};
+      let alertData: any = {};
+      if (typeof data.alert_data === "string") {
+        try {
+          alertData = JSON.parse(data.alert_data);
+        } catch (e) {
+          console.error(`Failed to parse alert_data for alert ${data.id}:`, e);
+          alertData = {};
+        }
+      } else {
+        alertData = data.alert_data || {};
+      }
 
       return {
         id: data.id,

@@ -149,3 +149,85 @@ const CAMPAIGNS_MAP: Record<string, string> = {
 - Documentation complète : voir fichier `VIGIE_DOCUMENTATION.md`
 - Repo Git : [à compléter]
 - Vercel : https://vigie-diabolocom.vercel.app
+
+## API Diabolocom — Référence pour Vigie
+
+La documentation complète est dans le fichier `diabolocom-api-v2-raw.md`. Voici les points clés pour Vigie.
+
+### Authentification
+- Header : `Private-Token: {token}`
+- Base URL : `https://public-{platform}.engage.diabolocom.com`
+
+### Correspondance MySQL ↔ API
+
+La Vigie utilise deux sources de données. Voici comment elles se mappent :
+
+| Donnée | MySQL (`call_logs_v3`) | API Contacts V2 |
+|--------|----------------------|-----------------|
+| ID du lead | `campaign_contact_id` | `contactId` (métier) ou `id` (système) |
+| Campagne | `campaign_id` | `campaignId` |
+| Code de clôture | `wrapup_name` (texte) | `wrapupId` (integer) → résoudre via API Wrapups |
+| Durée d'appel | `talk_duration` | ❌ Non disponible dans l'API Contacts |
+| Nb tentatives | `try_number` | `triesNumber` |
+| Agent | `user_login1` | `agentId` (integer) → résoudre via API Users |
+| Date d'appel | `call_start` | `lastCallTime` |
+| Priorité | Non disponible | `priority` |
+| État du lead | Non disponible | `state` |
+| Exclu | Non disponible | `excluded`, `excludedDetail` |
+
+### Quand utiliser l'API vs MySQL
+
+| Besoin | Source | Pourquoi |
+|--------|--------|----------|
+| Historique d'appels (durées, détails) | **MySQL** | L'API ne stocke pas l'historique des appels |
+| État actuel d'un lead (priorité, état, exclusion) | **API Contacts V2** | Temps réel |
+| Liste des leads d'une campagne | **API Contacts V2** | Recherche avancée avec 30+ filtres |
+| Infos campagne (mode, agents, statut) | **API Campaigns** | Seule source |
+| Détail d'un code de clôture | **API Wrapups** | Pour mapper `wrapup_name` ↔ `wrapupId` |
+| Détection d'anomalies sur durées d'appel | **MySQL** | Seule source avec `talk_duration` |
+
+### Endpoints les plus utiles pour Vigie
+
+**Rechercher des leads dans une campagne :**
+```
+POST /api/v2/voice/campaigns/{campaignId}/contacts/search
+Body: { "pageable": { "pageSize": 500 }, "query": { filtres... } }
+```
+Filtres utiles : `wrapupStatuses`, `minTries`, `maxTries`, `excluded`, `lastCallAfter`, `lastCallBefore`, `assignedAgentIds`
+
+**Récupérer un lead précis :**
+```
+GET /api/v2/voice/campaigns/{campaignId}/contacts/{contactId}
+```
+
+**Lister les campagnes actives :**
+```
+GET /api/v1/voice/campaigns?isArchived=false&isPaused=false
+```
+
+**Lister les wrapup codes :**
+```
+GET /api/v1/account/wrapups?wrapupFolderId=62251
+```
+Le dossier 62251 est le dossier de clôture Admissions.
+
+### Pièges à éviter dans les workflows n8n
+
+- **Batch update** : un champ mal orthographié dans `query` est ignoré silencieusement → risque de modifier TOUS les contacts
+- **Pagination API** : ne pas utiliser `totalElements`/`totalPages`, utiliser les booléens `first`/`last` ou l'URL `next`
+- **Téléphones** : E.164 sans le `+` (ex: `33612345678`)
+- **V2 vs V1** : Les contacts utilisent V2 (`id` système), les campagnes et wrapups utilisent V1
+- **Un seul batch à la fois** par campagne (sinon erreur 409)
+- **Max 300 contacts** par batch create, **max 500** par page de recherche
+
+### Nouvelles règles possibles grâce à l'API
+
+Ces règles ne sont pas encore implémentées mais deviennent possibles en croisant API + MySQL :
+
+| Règle | Logique | Sources |
+|-------|---------|---------|
+| Lead fantôme | Lead présent dans MySQL mais `excluded=true` dans l'API sans raison valide | API + MySQL |
+| Priorité incohérente | Lead avec 0 appels mais priorité > 1 dans l'API | API |
+| Campagne silencieuse | Campagne active (`isPaused=false`) mais 0 appels depuis 24h dans MySQL | API + MySQL |
+| Agent inactif | Agent assigné à une campagne mais 0 appels sur 48h | API + MySQL |
+| Lead orphelin | Lead dans l'API mais aucune trace dans MySQL (jamais appelé) | API + MySQL |

@@ -338,7 +338,7 @@ export default function AlertDetailPage() {
               </>
             ) : (
               <>
-                Lead #{alert.leadId} • {alert.campaign}
+                Contact #{alert.leadId} • {alert.campaign}
               </>
             )}
           </p>
