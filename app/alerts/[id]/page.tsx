@@ -577,7 +577,7 @@ export default function AlertDetailPage() {
                     <dd className="flex items-center gap-1">
                       <span className="font-mono text-gray-700 dark:text-gray-300 text-xs">{alert.data.systemId}</span>
                       <button
-                        onClick={() => copyToClipboard(alert.data.systemId, "System ID")}
+                        onClick={() => copyToClipboard(alert.data.systemId!, "System ID")}
                         className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
                         title="Copier le System ID"
                       >
