@@ -172,3 +172,21 @@ export function mapStatus(status: string): AlertStatus {
 export function getStatusLabel(status: string): string {
   return STATUS_LABELS[status] || status;
 }
+
+// ============================================
+// SOURCES DE LEADS
+// ============================================
+
+export const LEAD_SOURCES: Record<string, { label: string; icon: string; color: string }> = {
+  appel_entrant: { label: "Appel entrant", icon: "📞", color: "blue" },
+  wordpress: { label: "WordPress", icon: "🌐", color: "purple" },
+  ADWORDS: { label: "Google Ads", icon: "🎯", color: "green" },
+  facebook: { label: "Facebook", icon: "📘", color: "blue" },
+  instagram: { label: "Instagram", icon: "📷", color: "pink" },
+  unknown: { label: "Inconnu", icon: "❓", color: "gray" },
+};
+
+export function getLeadSourceInfo(source: string | null | undefined) {
+  if (!source) return LEAD_SOURCES.unknown;
+  return LEAD_SOURCES[source] || { label: source, icon: "📋", color: "gray" };
+}
