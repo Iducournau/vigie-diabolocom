@@ -61,7 +61,7 @@ Clause SQL : `campaign_id IN (5612, 5927, 5920, 5622, 5611, 5621, 5580, 6064, 60
 
 | Champ | Usage |
 |-------|-------|
-| `campaign_contact_id` | ID du lead (clé principale) |
+| `campaign_contact_id` | ID du contact (clé principale) |
 | `campaign_id` | ID campagne (pour filtrer) |
 | `wrapup_name` | Code de clôture de l'appel |
 | `talk_duration` | Durée de conversation (secondes) |
@@ -86,9 +86,11 @@ Clause SQL : `campaign_id IN (5612, 5927, 5920, 5622, 5611, 5621, 5580, 6064, 60
 ## Tables Supabase
 
 - `rules` : Configuration des règles (id, name, description, rule_type)
-- `alerts` : Alertes générées (id, rule_id, lead_id, campaign, status, detected_at, alert_data)
+- `alerts` : Alertes générées (id, rule_id, contact_id, campaign, status, detected_at, alert_data)
 - `alert_history` : Historique des actions sur les alertes
 - `logs` : Logs de synchronisation n8n
+
+**Note importante** : La colonne a été renommée de `lead_id` → `contact_id` le 11/02/2026 pour s'aligner avec la terminologie officielle de l'API Diabolocom V2. Le terme "Contact" est la terminologie métier correcte dans Diabolocom.
 
 ## Conventions de code
 
@@ -164,7 +166,7 @@ La Vigie utilise deux sources de données. Voici comment elles se mappent :
 
 | Donnée | MySQL (`call_logs_v3`) | API Contacts V2 |
 |--------|----------------------|-----------------|
-| ID du lead | `campaign_contact_id` | `contactId` (métier) ou `id` (système) |
+| ID du contact | `campaign_contact_id` | `contactId` (métier) ou `id` (système) |
 | Campagne | `campaign_id` | `campaignId` |
 | Code de clôture | `wrapup_name` (texte) | `wrapupId` (integer) → résoudre via API Wrapups |
 | Durée d'appel | `talk_duration` | ❌ Non disponible dans l'API Contacts |
@@ -180,22 +182,22 @@ La Vigie utilise deux sources de données. Voici comment elles se mappent :
 | Besoin | Source | Pourquoi |
 |--------|--------|----------|
 | Historique d'appels (durées, détails) | **MySQL** | L'API ne stocke pas l'historique des appels |
-| État actuel d'un lead (priorité, état, exclusion) | **API Contacts V2** | Temps réel |
-| Liste des leads d'une campagne | **API Contacts V2** | Recherche avancée avec 30+ filtres |
+| État actuel d'un contact (priorité, état, exclusion) | **API Contacts V2** | Temps réel |
+| Liste des contacts d'une campagne | **API Contacts V2** | Recherche avancée avec 30+ filtres |
 | Infos campagne (mode, agents, statut) | **API Campaigns** | Seule source |
 | Détail d'un code de clôture | **API Wrapups** | Pour mapper `wrapup_name` ↔ `wrapupId` |
 | Détection d'anomalies sur durées d'appel | **MySQL** | Seule source avec `talk_duration` |
 
 ### Endpoints les plus utiles pour Vigie
 
-**Rechercher des leads dans une campagne :**
+**Rechercher des contacts dans une campagne :**
 ```
 POST /api/v2/voice/campaigns/{campaignId}/contacts/search
 Body: { "pageable": { "pageSize": 500 }, "query": { filtres... } }
 ```
 Filtres utiles : `wrapupStatuses`, `minTries`, `maxTries`, `excluded`, `lastCallAfter`, `lastCallBefore`, `assignedAgentIds`
 
-**Récupérer un lead précis :**
+**Récupérer un contact précis :**
 ```
 GET /api/v2/voice/campaigns/{campaignId}/contacts/{contactId}
 ```
@@ -226,8 +228,33 @@ Ces règles ne sont pas encore implémentées mais deviennent possibles en crois
 
 | Règle | Logique | Sources |
 |-------|---------|---------|
-| Lead fantôme | Lead présent dans MySQL mais `excluded=true` dans l'API sans raison valide | API + MySQL |
-| Priorité incohérente | Lead avec 0 appels mais priorité > 1 dans l'API | API |
+| Contact fantôme | Contact présent dans MySQL mais `excluded=true` dans l'API sans raison valide | API + MySQL |
+| Priorité incohérente | Contact avec 0 appels mais priorité > 1 dans l'API | API |
 | Campagne silencieuse | Campagne active (`isPaused=false`) mais 0 appels depuis 24h dans MySQL | API + MySQL |
 | Agent inactif | Agent assigné à une campagne mais 0 appels sur 48h | API + MySQL |
-| Lead orphelin | Lead dans l'API mais aucune trace dans MySQL (jamais appelé) | API + MySQL |
+| Contact orphelin | Contact dans l'API mais aucune trace dans MySQL (jamais appelé) | API + MySQL |
+
+---
+
+## Historique des migrations
+
+### Migration lead_id → contact_id (11/02/2026)
+
+**Contexte** : Alignement avec la terminologie officielle de l'API Diabolocom V2 qui utilise "Contact" comme terme métier (et non "Lead").
+
+**Changements effectués** :
+- Colonne Supabase : `lead_id` renommée en `contact_id`
+- Code frontend : Toutes les références TypeScript mises à jour
+- Interface UI : Labels "Lead" → "Contact" dans toute l'application
+- Workflows n8n : Workflow "Lead dormant" mis à jour (4 autres workflows à mettre à jour)
+
+**Impact** :
+- ✅ Cohérence terminologique avec l'API Diabolocom
+- ✅ Meilleure compréhension métier
+- ✅ Code plus maintenable
+
+**Workflows n8n restants à migrer** :
+1. Rappel oublié (`23934576-a556-4035-8dc8-2d851a86e02e`)
+2. Unreachable suspect (`59cb9b8e-6916-47f8-898c-c2e18c81f4a6`)
+3. Clôture trop rapide (`7caa90f2-9288-4c80-8d6a-6d3078c6a135`)
+4. Acharnement (`c99b95b1-5dd6-48ed-b703-84df70e4eddb`)
