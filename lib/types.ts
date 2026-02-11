@@ -26,7 +26,7 @@ export interface Alert {
   id: string;
   ruleId: string;
   ruleName: string;
-  leadId: string;
+  contactId: string;
   campaign: string;
   severity: Severity;
   status: AlertStatus;

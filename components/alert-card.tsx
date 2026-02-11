@@ -47,7 +47,7 @@ export function AlertCard({ alert, compact = false, className }: AlertCardProps)
                 <span className="font-normal text-gray-500 dark:text-gray-400"> — {alert.campaign}</span>
               </p>
               <p className="text-xs text-gray-500 dark:text-gray-500">
-                Lead #{alert.leadId} • {formatTimeAgo(alert.detectedAt)}
+                Contact #{alert.contactId} • {formatTimeAgo(alert.detectedAt)}
               </p>
             </div>
           </div>
@@ -88,7 +88,7 @@ export function AlertCard({ alert, compact = false, className }: AlertCardProps)
             </div>
             <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{alert.campaign}</p>
             <p className="text-sm text-gray-500 dark:text-gray-500 mt-0.5">
-              Lead #{alert.leadId} • Détecté {formatTimeAgo(alert.detectedAt)}
+              Contact #{alert.contactId} • Détecté {formatTimeAgo(alert.detectedAt)}
             </p>
             
             {/* Données contextuelles */}

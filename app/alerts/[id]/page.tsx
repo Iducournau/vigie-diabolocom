@@ -175,7 +175,7 @@ export default function AlertDetailPage() {
       ruleName: ruleInfo.name,
       severity: ruleInfo.severity,
       status: mapStatus(data.status),
-      leadId: data.lead_id,
+      contactId: data.contact_id,
       campaign: getCampaignName(data.campaign),
       campaignId: data.campaign,
       detectedAt: new Date(data.detected_at),
@@ -334,11 +334,11 @@ export default function AlertDetailPage() {
           <p className="text-gray-500 dark:text-gray-400 mt-1">
             {alert.data.fullName || (alert.data.firstName && alert.data.lastName && `${alert.data.firstName} ${alert.data.lastName}`) ? (
               <>
-                {alert.data.fullName || `${alert.data.firstName} ${alert.data.lastName}`} • Lead #{alert.leadId} • {alert.campaign}
+                {alert.data.fullName || `${alert.data.firstName} ${alert.data.lastName}`} • Contact #{alert.contactId} • {alert.campaign}
               </>
             ) : (
               <>
-                Contact #{alert.leadId} • {alert.campaign}
+                Contact #{alert.contactId} • {alert.campaign}
               </>
             )}
           </p>
@@ -402,7 +402,7 @@ export default function AlertDetailPage() {
           )}
           <Button variant="outline" size="sm" asChild>
             <a
-              href={`https://youschool.diabolocom.com/desk/campaign-contacts/${alert.leadId}`}
+              href={`https://youschool.diabolocom.com/desk/campaign-contacts/${alert.contactId}`}
               target="_blank"
               rel="noopener noreferrer"
             >
@@ -531,13 +531,13 @@ export default function AlertDetailPage() {
             <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-5">
               <h2 className="font-medium text-gray-900 dark:text-gray-100 mb-4">Informations Diabolocom</h2>
               <dl className="space-y-3 text-sm">
-                {(alert.data.contactId || alert.leadId) && (
+                {alert.contactId && (
                   <div className="flex justify-between items-center">
                     <dt className="text-gray-500 dark:text-gray-400">Contact ID</dt>
                     <dd className="flex items-center gap-1">
-                      <span className="font-mono text-gray-700 dark:text-gray-300">{alert.data.contactId || alert.leadId}</span>
+                      <span className="font-mono text-gray-700 dark:text-gray-300">{alert.contactId}</span>
                       <button
-                        onClick={() => copyToClipboard(alert.data.contactId || alert.leadId, "Contact ID")}
+                        onClick={() => copyToClipboard(alert.contactId, "Contact ID")}
                         className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
                         title="Copier le Contact ID"
                       >

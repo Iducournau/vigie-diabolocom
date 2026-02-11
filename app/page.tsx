@@ -57,7 +57,7 @@ interface AlertRow {
   ruleName: string;
   severity: Severity;
   status: AlertStatus;
-  leadId: string;
+  contactId: string;
   campaign: string;
   campaignId: string;
   detectedAt: Date;
@@ -336,7 +336,7 @@ function RecentActivityFeed({ alerts }: { alerts: AlertRow[] }) {
                         </span>
                       </div>
                       <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                        Lead #{alert.leadId} • {alert.campaign}
+                        Contact #{alert.contactId} • {alert.campaign}
                       </p>
                     </div>
                   </div>
@@ -478,7 +478,7 @@ export default function DashboardPage() {
         ruleName: ruleInfo.name,
         severity: ruleInfo.severity,
         status: mapStatus(data.status),
-        leadId: data.lead_id,
+        contactId: data.contact_id,
         campaign: getCampaignName(data.campaign),
         campaignId: data.campaign,
         detectedAt: new Date(data.detected_at),

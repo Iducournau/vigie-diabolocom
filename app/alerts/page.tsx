@@ -101,7 +101,7 @@ interface AlertRow {
   ruleName: string;
   severity: Severity;
   status: AlertStatus;
-  leadId: string;
+  contactId: string;
   campaign: string;
   campaignId: string;
   detectedAt: Date;
@@ -149,7 +149,7 @@ const sourceOptions = Object.entries(LEAD_SOURCES).map(([key, info]) => ({
 
 // Labels des colonnes pour le bouton View
 const columnLabels: Record<string, string> = {
-  leadId: "Lead",
+  contactId: "Contact",
   ruleName: "Règle",
   status: "Statut",
   campaign: "Formation",
@@ -317,10 +317,10 @@ const columns: ColumnDef<AlertRow>[] = [
     size: 40,
   },
   {
-    accessorKey: "leadId",
-    header: () => <span className="text-sm font-medium">Lead</span>,
+    accessorKey: "contactId",
+    header: () => <span className="text-sm font-medium">Contact</span>,
     cell: ({ row }) => (
-      <div className="w-[80px]">{row.getValue("leadId")}</div>
+      <div className="w-[80px]">{row.getValue("contactId")}</div>
     ),
   },
   {
@@ -701,7 +701,7 @@ export default function AlertsPage() {
           ruleName: ruleInfo.name,
           severity: ruleInfo.severity,
           status: mapStatus(data.status),
-          leadId: data.lead_id,
+          contactId: data.contact_id,
           campaign: getCampaignName(data.campaign),
           campaignId: data.campaign,
           detectedAt: new Date(data.detected_at),
@@ -751,7 +751,7 @@ export default function AlertsPage() {
       if (globalFilter) {
         const search = globalFilter.toLowerCase();
         return (
-          alert.leadId.toLowerCase().includes(search) ||
+          alert.contactId.toLowerCase().includes(search) ||
           alert.ruleName.toLowerCase().includes(search) ||
           alert.campaign.toLowerCase().includes(search) ||
           (alert.agent && alert.agent.toLowerCase().includes(search))
