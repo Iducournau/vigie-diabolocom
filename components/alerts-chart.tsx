@@ -5,19 +5,7 @@ import { Area, AreaChart, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContai
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
 import { Loader2 } from "lucide-react";
-
-// Mapping des règles vers sévérité
-const RULES_SEVERITY: Record<string, "critical" | "warning" | "info"> = {
-  "00097670-06b9-406a-97cc-c8d138448eff": "critical", // Lead dormant
-  "23934576-a556-4035-8dc8-2d851a86e02e": "critical", // Rappel oublié
-  "59cb9b8e-6916-47f8-898c-c2e18c81f4a6": "warning",  // Unreachable suspect
-  "7caa90f2-9288-4c80-8d6a-6d3078c6a135": "warning",  // Clôture trop rapide
-  "c99b95b1-5dd6-48ed-b703-84df70e4eddb": "info",     // Acharnement
-  // Nouvelles règles Retry
-  "a1b2c3d4-1111-4000-8000-000000000001": "info",     // Retry en retard (léger)
-  "a1b2c3d4-2222-4000-8000-000000000002": "warning",  // Retry en retard (modéré)
-  "a1b2c3d4-3333-4000-8000-000000000003": "critical", // Retry en retard (critique)
-};
+import { useRules } from "@/lib/rules";
 
 interface ChartDataPoint {
   day: string;
@@ -69,6 +57,7 @@ function CustomTooltip({ active, payload, label }: { active?: boolean; payload?:
 }
 
 export function AlertsChart() {
+  const { rulesMap } = useRules();
   const [period, setPeriod] = useState<PeriodKey>("7d");
   const [chartData, setChartData] = useState<ChartDataPoint[]>([]);
   const [loading, setLoading] = useState(true);
@@ -120,7 +109,7 @@ export function AlertsChart() {
       (alerts || []).forEach((alert) => {
         const date = new Date(alert.detected_at);
         const dayKey = formatDayKey(date, days);
-        const severity = RULES_SEVERITY[alert.rule_id] || "info";
+        const severity = rulesMap[alert.rule_id]?.severity || "info";
         
         if (dataByDay[dayKey]) {
           if (severity === "critical") {
@@ -160,7 +149,7 @@ export function AlertsChart() {
     }
 
     fetchChartData();
-  }, [period]);
+  }, [period, rulesMap]);
 
   const periodLabel = periods.find((p) => p.key === period)?.label || "";
   const isUp = trend > 0;

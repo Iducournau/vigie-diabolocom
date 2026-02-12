@@ -1,64 +1,8 @@
 // Constantes centralisées pour Vigie Diabolocom
-// RULES_MAP, CAMPAIGNS_MAP et labels sont définis ici
+// CAMPAIGNS_MAP et labels sont définis ici
+// Note: RULES_MAP a été migré vers lib/rules.ts (useRules hook)
 
 import { Severity, AlertStatus } from "./types";
-
-// ============================================
-// RÈGLES DE DÉTECTION (8 règles)
-// ============================================
-
-export const RULES_MAP: Record<string, { name: string; severity: Severity; description: string }> = {
-  // Règles originales (5)
-  "00097670-06b9-406a-97cc-c8d138448eff": {
-    name: "Lead dormant",
-    severity: "critical",
-    description: "Lead prioritaire sans appel depuis plus de 72h",
-  },
-  "23934576-a556-4035-8dc8-2d851a86e02e": {
-    name: "Rappel oublié",
-    severity: "critical",
-    description: "RDV programmé sans rappel effectué depuis 48h",
-  },
-  "59cb9b8e-6916-47f8-898c-c2e18c81f4a6": {
-    name: "Unreachable suspect",
-    severity: "warning",
-    description: "Wrapup Injoignable avec talk_duration > 30s",
-  },
-  "7caa90f2-9288-4c80-8d6a-6d3078c6a135": {
-    name: "Clôture trop rapide",
-    severity: "warning",
-    description: "Wrapup Perdu/Raccroche avec talk_duration < 10s",
-  },
-  "c99b95b1-5dd6-48ed-b703-84df70e4eddb": {
-    name: "Acharnement",
-    severity: "info",
-    description: "Lead avec 10+ appels sur 7 jours",
-  },
-  // Règles Retry en retard (3)
-  "a1b2c3d4-1111-4000-8000-000000000001": {
-    name: "Retry en retard (léger)",
-    severity: "info",
-    description: "RDV programmé dépassé de 24h sans rappel",
-  },
-  "a1b2c3d4-2222-4000-8000-000000000002": {
-    name: "Retry en retard (modéré)",
-    severity: "warning",
-    description: "RDV programmé dépassé de 48h sans rappel",
-  },
-  "a1b2c3d4-3333-4000-8000-000000000003": {
-    name: "Retry en retard (critique)",
-    severity: "critical",
-    description: "RDV programmé dépassé de 72h sans rappel",
-  },
-};
-
-// Helper pour récupérer les infos d'une règle
-export function getRuleInfo(ruleId: string) {
-  return RULES_MAP[ruleId] || { name: "Règle inconnue", severity: "info" as Severity, description: "" };
-}
-
-// Liste des IDs de règles pour les filtres
-export const RULE_IDS = Object.keys(RULES_MAP);
 
 // ============================================
 // CAMPAGNES ADMISSIONS (12)
@@ -189,4 +133,27 @@ export const LEAD_SOURCES: Record<string, { label: string; icon: string; color: 
 export function getLeadSourceInfo(source: string | null | undefined) {
   if (!source) return LEAD_SOURCES.unknown;
   return LEAD_SOURCES[source] || { label: source, icon: "📋", color: "gray" };
+}
+
+// ============================================
+// HELPERS POUR UI
+// ============================================
+
+/**
+ * Retourne la classe Tailwind pour le dot de timeline selon l'action
+ */
+export function getDotColorByAction(action: string): string {
+  switch (action) {
+    case "acknowledged":
+      return "bg-blue-500";
+    case "resolved":
+      return "bg-emerald-500";
+    case "ignored":
+    case "dismissed":
+      return "bg-gray-400";
+    case "reopened":
+      return "bg-amber-500";
+    default:
+      return "bg-amber-500"; // detected
+  }
 }

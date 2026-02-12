@@ -21,13 +21,12 @@ import { cn } from "@/lib/utils";
 import { styles } from "@/lib/styles";
 import { colors } from "@/lib/theme";
 import {
-  RULES_MAP,
   CAMPAIGNS_MAP,
   getCampaignName,
-  getRuleInfo,
   mapStatus,
   formatTimeAgo,
 } from "@/lib/constants";
+import { useRules, getRuleInfo } from "@/lib/rules";
 import {
   PieChart,
   Pie,
@@ -370,6 +369,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [lastSync, setLastSync] = useState<Date | null>(null);
+  const { rulesMap, loading: rulesLoading } = useRules();
 
   async function fetchDashboardData() {
     // Fetch toutes les alertes ouvertes pour les stats
@@ -388,7 +388,7 @@ export default function DashboardPage() {
     const campaignSeverity: Record<string, { critical: number; warning: number; info: number }> = {};
 
     (openAlerts || []).forEach((alert) => {
-      const ruleInfo = getRuleInfo(alert.rule_id);
+      const ruleInfo = getRuleInfo(rulesMap, alert.rule_id);
       if (ruleInfo.severity === "critical") critical++;
       else if (ruleInfo.severity === "warning") warning++;
       else if (ruleInfo.severity === "info") info++;
@@ -408,7 +408,7 @@ export default function DashboardPage() {
 
     // Préparer les données pour les charts
     const byType = Object.entries(typeCount).map(([ruleId, count], index) => ({
-      name: getRuleInfo(ruleId).name,
+      name: getRuleInfo(rulesMap, ruleId).name,
       value: count,
       color: colors.chart.series[index % colors.chart.series.length],
     }));
@@ -459,7 +459,7 @@ export default function DashboardPage() {
       .limit(10);
 
     const transformedRecent: AlertRow[] = (recentData || []).map((data) => {
-      const ruleInfo = getRuleInfo(data.rule_id);
+      const ruleInfo = getRuleInfo(rulesMap, data.rule_id);
       let alertData: any = {};
       if (typeof data.alert_data === "string") {
         try {
@@ -493,8 +493,10 @@ export default function DashboardPage() {
   }
 
   useEffect(() => {
-    fetchDashboardData();
-  }, []);
+    if (!rulesLoading) {
+      fetchDashboardData();
+    }
+  }, [rulesLoading]);
 
   async function handleRefresh() {
     setRefreshing(true);

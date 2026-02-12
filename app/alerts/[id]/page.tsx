@@ -33,8 +33,6 @@ import {
   Info,
 } from "lucide-react";
 import {
-  RULES_MAP,
-  getRuleInfo,
   getCampaignName,
   ACTION_LABELS,
   mapStatus,
@@ -42,7 +40,12 @@ import {
   formatDateTime,
   formatPhone,
   getLeadSourceInfo,
+  getDotColorByAction,
 } from "@/lib/constants";
+import { useRules, getRuleInfo } from "@/lib/rules";
+import { InfoField } from "@/components/info-field";
+import { styles } from "@/lib/styles";
+import { cn } from "@/lib/utils";
 
 // Types
 interface HistoryEntry {
@@ -104,15 +107,7 @@ const STATE_LABELS: Record<string, string> = {
   "excluded": "Exclu",
 };
 
-function getStatusColor(status: string): string {
-  switch (status) {
-    case "acknowledged": return "bg-blue-500";
-    case "resolved": return "bg-emerald-500";
-    case "ignored": return "bg-gray-400";
-    case "reopened": return "bg-amber-500";
-    default: return "bg-gray-400";
-  }
-}
+// getStatusColor removed - using getDotColorByAction from constants instead
 
 interface TransformedAlert extends Omit<Alert, 'data'> {
   data: AlertData;
@@ -122,7 +117,8 @@ interface TransformedAlert extends Omit<Alert, 'data'> {
 export default function AlertDetailPage() {
   const params = useParams();
   const alertId = params.id as string;
-  
+  const { rulesMap, loading: rulesLoading } = useRules();
+
   const [alert, setAlert] = useState<TransformedAlert | null>(null);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -152,7 +148,7 @@ export default function AlertDetailPage() {
     }
 
     // Maintenant les données viennent des colonnes directes
-    const ruleInfo = getRuleInfo(data.rule_id);
+    const ruleInfo = getRuleInfo(rulesMap, data.rule_id);
 
     const createdAt = new Date(data.created_at_lead || data.detected_at);
     const now = new Date();
@@ -231,9 +227,11 @@ export default function AlertDetailPage() {
   }
 
   useEffect(() => {
-    fetchAlert();
-    fetchHistory();
-  }, [alertId]);
+    if (!rulesLoading) {
+      fetchAlert();
+      fetchHistory();
+    }
+  }, [alertId, rulesLoading]);
 
   async function updateStatus(newStatus: "open" | "acknowledged" | "resolved" | "ignored", action: string) {
     if (!alert) return;
@@ -292,7 +290,7 @@ export default function AlertDetailPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     );
   }
@@ -306,19 +304,19 @@ export default function AlertDetailPage() {
             Retour aux alertes
           </Button>
         </Link>
-        <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-12 text-center">
-          <p className="text-gray-500 dark:text-gray-400">{error || "Alerte introuvable."}</p>
+        <div className="bg-card rounded-lg border border-border p-12 text-center">
+          <p className="text-muted-foreground">{error || "Alerte introuvable."}</p>
         </div>
       </div>
     );
   }
 
-  const ruleInfo = getRuleInfo(alert.ruleId);
+  const ruleInfo = getRuleInfo(rulesMap, alert.ruleId);
 
   return (
     <div className="space-y-6">
       <Link href="/alerts">
-        <Button variant="ghost" size="sm" className="text-gray-500 dark:text-gray-400">
+        <Button variant="ghost" size="sm" className="text-muted-foreground">
           <ArrowLeft className="h-4 w-4 mr-2" />
           Retour aux alertes
         </Button>
@@ -327,11 +325,11 @@ export default function AlertDetailPage() {
       <div className="flex items-start justify-between">
         <div>
           <div className="flex items-center gap-3 flex-wrap">
-            <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">{alert.ruleName}</h1>
+            <h1 className={styles.page.title}>{alert.ruleName}</h1>
             <SeverityBadge severity={alert.severity} />
             <StatusBadge status={alert.status} />
           </div>
-          <p className="text-gray-500 dark:text-gray-400 mt-1">
+          <p className={cn(styles.page.subtitle, "mt-1")}>
             {alert.data.fullName || (alert.data.firstName && alert.data.lastName && `${alert.data.firstName} ${alert.data.lastName}`) ? (
               <>
                 {alert.data.fullName || `${alert.data.firstName} ${alert.data.lastName}`} • Contact #{alert.contactId} • {alert.campaign}
@@ -347,17 +345,16 @@ export default function AlertDetailPage() {
         <div className="flex items-center gap-2">
           {alert.status === "new" && (
             <>
-              <Button 
-                size="sm" 
+              <Button
+                size="sm"
                 onClick={() => updateStatus("acknowledged", "acknowledged")}
                 disabled={updating}
-                className="bg-gray-900 text-white hover:bg-gray-900/80 dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-gray-100/80"
               >
                 {updating ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Eye className="h-4 w-4 mr-2" />}
                 Prendre en charge
               </Button>
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 size="sm"
                 onClick={() => updateStatus("ignored", "ignored")}
                 disabled={updating}
@@ -369,17 +366,16 @@ export default function AlertDetailPage() {
           )}
           {alert.status === "acknowledged" && (
             <>
-              <Button 
+              <Button
                 size="sm"
                 onClick={() => updateStatus("resolved", "resolved")}
                 disabled={updating}
-                className="bg-gray-900 text-white hover:bg-gray-900/80 dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-gray-100/80"
               >
                 {updating ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
                 Marquer résolu
               </Button>
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 size="sm"
                 onClick={() => updateStatus("ignored", "ignored")}
                 disabled={updating}
@@ -390,8 +386,8 @@ export default function AlertDetailPage() {
             </>
           )}
           {(alert.status === "resolved" || alert.status === "ignored") && (
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               size="sm"
               onClick={() => updateStatus("open", "reopened")}
               disabled={updating}
@@ -416,111 +412,80 @@ export default function AlertDetailPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
           {/* Infos Prospect */}
-          <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-5">
-            <h2 className="font-medium text-gray-900 dark:text-gray-100 mb-4">Informations du prospect</h2>
+          <div className={styles.card.withPadding}>
+            <h2 className="font-medium text-foreground mb-3">Informations du prospect</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {(alert.data.fullName || (alert.data.firstName && alert.data.lastName)) && (
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-indigo-50 dark:bg-indigo-950 flex items-center justify-center">
-                    <User className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Nom</p>
-                    <p className="font-medium text-gray-900 dark:text-gray-100">
-                      {alert.data.fullName || `${alert.data.firstName} ${alert.data.lastName}`}
-                    </p>
-                  </div>
-                </div>
+                <InfoField
+                  icon={User}
+                  iconColor="indigo"
+                  label="Nom"
+                  value={alert.data.fullName || `${alert.data.firstName} ${alert.data.lastName}`}
+                />
               )}
               {alert.data.email && (
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-emerald-50 dark:bg-emerald-950 flex items-center justify-center">
-                    <Mail className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Email</p>
-                    <p className="font-medium text-gray-900 dark:text-gray-100">{alert.data.email}</p>
-                  </div>
-                </div>
+                <InfoField
+                  icon={Mail}
+                  iconColor="emerald"
+                  label="Email"
+                  value={alert.data.email}
+                />
               )}
               {alert.data.phone && (
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-blue-50 dark:bg-blue-950 flex items-center justify-center">
-                    <Phone className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Téléphone</p>
-                    <p className="font-medium text-gray-900 dark:text-gray-100">{formatPhone(alert.data.phone)}</p>
-                  </div>
-                </div>
+                <InfoField
+                  icon={Phone}
+                  iconColor="blue"
+                  label="Téléphone"
+                  value={formatPhone(alert.data.phone)}
+                />
               )}
               {alert.campaign && (
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-purple-50 dark:bg-purple-950 flex items-center justify-center">
-                    <Tag className="h-4 w-4 text-purple-600 dark:text-purple-400" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Campagne</p>
-                    <p className="font-medium text-gray-900 dark:text-gray-100">{alert.campaign}</p>
-                  </div>
-                </div>
+                <InfoField
+                  icon={Tag}
+                  iconColor="purple"
+                  label="Campagne"
+                  value={alert.campaign}
+                />
               )}
               {alert.data.createdBy && (
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-green-50 dark:bg-green-950 flex items-center justify-center">
-                    <User className="h-4 w-4 text-green-600 dark:text-green-400" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Créé par</p>
-                    <p className="font-medium text-gray-900 dark:text-gray-100">{alert.data.createdBy}</p>
-                  </div>
-                </div>
+                <InfoField
+                  icon={User}
+                  iconColor="green"
+                  label="Créé par"
+                  value={alert.data.createdBy}
+                />
               )}
               {alert.data.createdAt && (
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-amber-50 dark:bg-amber-950 flex items-center justify-center">
-                    <Calendar className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Fiche créée dans Diabolocom le</p>
-                    <p className="font-medium text-gray-900 dark:text-gray-100">{formatDateTime(alert.data.createdAt)}</p>
-                  </div>
-                </div>
+                <InfoField
+                  icon={Calendar}
+                  iconColor="amber"
+                  label="Fiche créée dans Diabolocom le"
+                  value={formatDateTime(alert.data.createdAt)}
+                />
               )}
               {alert.data.lastCallTime && (
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-cyan-50 dark:bg-cyan-950 flex items-center justify-center">
-                    <Phone className="h-4 w-4 text-cyan-600 dark:text-cyan-400" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Dernier appel</p>
-                    <p className="font-medium text-gray-900 dark:text-gray-100">{formatDateTime(alert.data.lastCallTime)}</p>
-                  </div>
-                </div>
+                <InfoField
+                  icon={Phone}
+                  iconColor="cyan"
+                  label="Dernier appel"
+                  value={formatDateTime(alert.data.lastCallTime)}
+                />
               )}
               {alert.data.state && (
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-gray-50 dark:bg-gray-800 flex items-center justify-center">
-                    <AlertCircle className="h-4 w-4 text-gray-600 dark:text-gray-400" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">État</p>
-                    <p className="font-medium text-gray-900 dark:text-gray-100">
-                      {STATE_LABELS[alert.data.state] || alert.data.state}
-                    </p>
-                  </div>
-                </div>
+                <InfoField
+                  icon={AlertCircle}
+                  iconColor="gray"
+                  label="État"
+                  value={STATE_LABELS[alert.data.state] || alert.data.state}
+                />
               )}
               {alert.data.excludedDetail && (
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-red-50 dark:bg-red-950 flex items-center justify-center">
-                    <XCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Raison exclusion</p>
-                    <p className="font-medium text-gray-900 dark:text-gray-100">{alert.data.excludedDetail}</p>
-                  </div>
-                </div>
+                <InfoField
+                  icon={XCircle}
+                  iconColor="red"
+                  label="Raison exclusion"
+                  value={alert.data.excludedDetail}
+                />
               )}
             </div>
           </div>
@@ -528,43 +493,45 @@ export default function AlertDetailPage() {
           {/* Grid: Informations Diabolocom + Historique des appels */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Informations Diabolocom */}
-            <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-5">
-              <h2 className="font-medium text-gray-900 dark:text-gray-100 mb-4">Informations Diabolocom</h2>
-              <dl className="space-y-3 text-sm">
+            <div className={styles.card.withPadding}>
+              <h2 className="font-medium text-foreground mb-3">Informations Diabolocom</h2>
+              <dl className="space-y-3">
                 {alert.contactId && (
                   <div className="flex justify-between items-center">
-                    <dt className="text-gray-500 dark:text-gray-400">Contact ID</dt>
+                    <dt className="text-xs text-muted-foreground">Contact ID</dt>
                     <dd className="flex items-center gap-1">
-                      <span className="font-mono text-gray-700 dark:text-gray-300">{alert.contactId}</span>
-                      <button
+                      <span className="text-sm font-mono text-foreground">{alert.contactId}</span>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6"
                         onClick={() => copyToClipboard(alert.contactId, "Contact ID")}
-                        className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
                         title="Copier le Contact ID"
                       >
-                        <Copy className="h-3 w-3 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300" />
-                      </button>
+                        <Copy className="h-3 w-3" />
+                      </Button>
                     </dd>
                   </div>
                 )}
                 {(alert.data.agentName || alert.data.lastAgent) && (
                   <div className="flex justify-between items-start">
-                    <dt className="text-gray-500 dark:text-gray-400">Agent</dt>
-                    <dd className="text-right text-gray-700 dark:text-gray-300">{alert.data.agentName || alert.data.lastAgent}</dd>
+                    <dt className="text-xs text-muted-foreground">Agent</dt>
+                    <dd className="text-sm text-right text-foreground">{alert.data.agentName || alert.data.lastAgent}</dd>
                   </div>
                 )}
                 {alert.campaignId && (
                   <div className="flex justify-between items-start">
-                    <dt className="text-gray-500 dark:text-gray-400">Campaign ID</dt>
-                    <dd className="text-right text-gray-700 dark:text-gray-300">{alert.campaignId}</dd>
+                    <dt className="text-xs text-muted-foreground">Campaign ID</dt>
+                    <dd className="text-sm text-right text-foreground">{alert.campaignId}</dd>
                   </div>
                 )}
                 {alert.data.leadSource && (
                   <div className="flex justify-between items-start">
-                    <dt className="text-gray-500 dark:text-gray-400">Provenance</dt>
-                    <dd className="text-right">
+                    <dt className="text-xs text-muted-foreground">Provenance</dt>
+                    <dd className="text-sm text-right">
                       <div className="flex items-center justify-end gap-1.5">
                         <span className="text-base">{getLeadSourceInfo(alert.data.leadSource).icon}</span>
-                        <span className="text-gray-700 dark:text-gray-300">
+                        <span className="text-sm text-foreground">
                           {getLeadSourceInfo(alert.data.leadSource).label}
                         </span>
                       </div>
@@ -573,16 +540,18 @@ export default function AlertDetailPage() {
                 )}
                 {alert.data.systemId && (
                   <div className="flex justify-between items-center">
-                    <dt className="text-gray-500 dark:text-gray-400">System ID</dt>
+                    <dt className="text-xs text-muted-foreground">System ID</dt>
                     <dd className="flex items-center gap-1">
-                      <span className="font-mono text-gray-700 dark:text-gray-300 text-xs">{alert.data.systemId}</span>
-                      <button
+                      <span className="text-sm font-mono text-foreground">{alert.data.systemId}</span>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6"
                         onClick={() => copyToClipboard(alert.data.systemId!, "System ID")}
-                        className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
                         title="Copier le System ID"
                       >
-                        <Copy className="h-3 w-3 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300" />
-                      </button>
+                        <Copy className="h-3 w-3" />
+                      </Button>
                     </dd>
                   </div>
                 )}
@@ -590,84 +559,87 @@ export default function AlertDetailPage() {
             </div>
 
             {/* Historique des appels */}
-            {alert.data.callHistory && alert.data.callHistory.length > 0 && (
-              <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-5">
-                <h2 className="font-medium text-gray-900 dark:text-gray-100 mb-4">Historique des appels</h2>
+            <div className={styles.card.withPadding}>
+              <h2 className="font-medium text-foreground mb-3">Historique des appels</h2>
+              {alert.data.callHistory && alert.data.callHistory.length > 0 ? (
                 <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
+                  <table className="w-full">
                     <thead>
-                      <tr className="border-b border-gray-200 dark:border-gray-800">
-                        <th className="text-left py-2 px-2 font-medium text-gray-500 dark:text-gray-400">Date</th>
-                        <th className="text-left py-2 px-2 font-medium text-gray-500 dark:text-gray-400">Wrapup</th>
-                        <th className="text-left py-2 px-2 font-medium text-gray-500 dark:text-gray-400">Durée</th>
-                        <th className="text-left py-2 px-2 font-medium text-gray-500 dark:text-gray-400">Agent</th>
-                        <th className="text-left py-2 px-2 font-medium text-gray-500 dark:text-gray-400">Essai #</th>
+                      <tr className="border-b border-border">
+                        <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Date</th>
+                        <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Wrapup</th>
+                        <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Durée</th>
+                        <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Agent</th>
+                        <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Essai #</th>
                       </tr>
                     </thead>
                     <tbody>
                       {alert.data.callHistory.map((call, index) => (
-                        <tr key={index} className="border-b border-gray-100 dark:border-gray-800 last:border-0">
-                          <td className="py-3 px-2 text-gray-900 dark:text-gray-100 whitespace-nowrap">
+                        <tr key={index} className="border-b border-border last:border-0">
+                          <td className="px-5 py-4 text-sm text-foreground whitespace-nowrap">
                             {call.call_start ? formatDateTime(call.call_start) : "—"}
                           </td>
-                          <td className="py-3 px-2 text-gray-900 dark:text-gray-100">
-                            <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300">
+                          <td className="px-5 py-4">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-muted text-foreground">
                               {call.wrapup_name || "—"}
                             </span>
                           </td>
-                          <td className="py-3 px-2 text-gray-900 dark:text-gray-100">
+                          <td className="px-5 py-4 text-sm text-foreground">
                             <div className="flex items-center gap-1.5">
-                              <Clock className="h-3 w-3 text-gray-400" />
+                              <Clock className="h-3 w-3 text-muted-foreground" />
                               {call.talk_duration !== undefined ? `${call.talk_duration}s` : "—"}
                             </div>
                           </td>
-                          <td className="py-3 px-2 text-gray-900 dark:text-gray-100">{call.agent || "—"}</td>
-                          <td className="py-3 px-2 text-gray-900 dark:text-gray-100">{call.try_number !== undefined ? call.try_number : "—"}</td>
+                          <td className="px-5 py-4 text-sm text-foreground">{call.agent || "—"}</td>
+                          <td className="px-5 py-4 text-sm text-foreground">{call.try_number !== undefined ? call.try_number : "—"}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
-              </div>
-            )}
+              ) : (
+                <p className="text-sm text-muted-foreground py-4">Aucun appel effectué.</p>
+              )}
+            </div>
           </div>
 
 
-          <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-5">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="font-medium text-gray-900 dark:text-gray-100">Données brutes</h2>
-              <button
+          <div className={styles.card.withPadding}>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="font-medium text-foreground">Données brutes</h2>
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={() => copyToClipboard(JSON.stringify(alert, null, 2), "Données brutes")}
-                className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-md transition-colors"
                 title="Copier le JSON"
               >
-                <Copy className="h-3 w-3" />
+                <Copy className="h-3 w-3 mr-2" />
                 Copier
-              </button>
+              </Button>
             </div>
-            <pre className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg text-xs overflow-x-auto text-gray-700 dark:text-gray-300">
+            <pre className="bg-muted p-4 rounded-lg text-xs overflow-x-auto text-foreground">
               {JSON.stringify(alert, null, 2)}
             </pre>
           </div>
         </div>
 
         <div className="space-y-6">
-          <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-5">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="font-medium text-gray-900 dark:text-gray-100">Détails de l&apos;alerte</h2>
+          <div className={styles.card.withPadding}>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="font-medium text-foreground">Détails de l&apos;alerte</h2>
               <SeverityBadge severity={ruleInfo.severity} />
             </div>
-            <dl className="space-y-3 text-sm">
+            <dl className="space-y-3">
               <div className="flex justify-between items-center">
-                <dt className="text-gray-500 dark:text-gray-400">Règle</dt>
+                <dt className="text-xs text-muted-foreground">Règle</dt>
                 <dd className="flex items-center gap-1.5">
-                  <span className="font-medium text-gray-900 dark:text-gray-100">{ruleInfo.name}</span>
+                  <span className="text-sm font-medium text-foreground">{ruleInfo.name}</span>
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <button className="p-0.5 rounded hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                          <Info className="h-4 w-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300" />
-                        </button>
+                        <Button variant="ghost" size="icon" className="h-6 w-6">
+                          <Info className="h-4 w-4" />
+                        </Button>
                       </TooltipTrigger>
                       <TooltipContent>
                         <p className="max-w-xs">{ruleInfo.description}</p>
@@ -677,95 +649,97 @@ export default function AlertDetailPage() {
                 </dd>
               </div>
               <div className="flex justify-between items-center">
-                <dt className="text-gray-500 dark:text-gray-400">ID Alerte</dt>
+                <dt className="text-xs text-muted-foreground">ID Alerte</dt>
                 <dd className="flex items-center gap-1">
-                  <span className="font-mono text-gray-700 dark:text-gray-300 text-xs">{alert.id.slice(0, 8)}...</span>
-                  <button
+                  <span className="text-sm font-mono text-foreground">{alert.id.slice(0, 8)}...</span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6"
                     onClick={() => copyToClipboard(alert.id, "ID Alerte")}
-                    className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
                     title="Copier l'ID complet"
                   >
-                    <Copy className="h-3 w-3 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300" />
-                  </button>
+                    <Copy className="h-3 w-3" />
+                  </Button>
                 </dd>
               </div>
               <div className="flex justify-between items-start">
-                <dt className="text-gray-500 dark:text-gray-400">Date de détection</dt>
+                <dt className="text-xs text-muted-foreground">Date de détection</dt>
                 <dd className="text-right">
-                  <div className="text-gray-700 dark:text-gray-300">{formatDateTime(alert.detectedAt)}</div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400">{formatTimeAgo(alert.detectedAt)}</div>
+                  <div className="text-sm text-foreground">{formatDateTime(alert.detectedAt)}</div>
+                  <div className="text-xs text-muted-foreground">{formatTimeAgo(alert.detectedAt)}</div>
                 </dd>
               </div>
             </dl>
           </div>
 
-          <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-5">
-            <h2 className="font-medium text-gray-900 dark:text-gray-100 mb-4">Métriques du lead</h2>
-            <dl className="space-y-3 text-sm">
+          <div className={styles.card.withPadding}>
+            <h2 className="font-medium text-foreground mb-3">Métriques du lead</h2>
+            <dl className="space-y-3">
               {alert.data.priority !== undefined && (
                 <div className="flex justify-between">
-                  <dt className="text-gray-500 dark:text-gray-400">Priorité</dt>
-                  <dd className="text-gray-700 dark:text-gray-300 font-medium">{alert.data.priority}</dd>
+                  <dt className="text-xs text-muted-foreground">Priorité</dt>
+                  <dd className="text-sm text-foreground font-medium">{alert.data.priority}</dd>
                 </div>
               )}
               {alert.data.createdAt && (
                 <div className="flex justify-between items-start">
-                  <dt className="text-gray-500 dark:text-gray-400">Date création lead</dt>
-                  <dd className="text-right text-gray-700 dark:text-gray-300">{formatDateTime(alert.data.createdAt)}</dd>
+                  <dt className="text-xs text-muted-foreground">Date création lead</dt>
+                  <dd className="text-sm text-right text-foreground">{formatDateTime(alert.data.createdAt)}</dd>
                 </div>
               )}
               {alert.data.hoursWithoutCall !== undefined && (
                 <div className="flex justify-between">
-                  <dt className="text-gray-500 dark:text-gray-400">Temps sans appels</dt>
-                  <dd className="text-gray-700 dark:text-gray-300 font-medium">{alert.data.hoursWithoutCall}h</dd>
+                  <dt className="text-xs text-muted-foreground">Temps sans appels</dt>
+                  <dd className="text-sm text-foreground font-medium">{alert.data.hoursWithoutCall}h</dd>
                 </div>
               )}
               {alert.data.callDuration !== undefined && (
                 <div className="flex justify-between">
-                  <dt className="text-gray-500 dark:text-gray-400">Durée dernier appel</dt>
-                  <dd className="text-gray-700 dark:text-gray-300">{alert.data.callDuration}s</dd>
+                  <dt className="text-xs text-muted-foreground">Durée dernier appel</dt>
+                  <dd className="text-sm text-foreground">{alert.data.callDuration}s</dd>
                 </div>
               )}
               {alert.data.closingCode && (
                 <div className="flex justify-between items-start">
-                  <dt className="text-gray-500 dark:text-gray-400">Code de clôture</dt>
-                  <dd className="text-right text-gray-700 dark:text-gray-300">{alert.data.closingCode}</dd>
+                  <dt className="text-xs text-muted-foreground">Code de clôture</dt>
+                  <dd className="text-sm text-right text-foreground">{alert.data.closingCode}</dd>
                 </div>
               )}
               {alert.data.triesNumber !== undefined && (
                 <div className="flex justify-between">
-                  <dt className="text-gray-500 dark:text-gray-400">Tentatives</dt>
-                  <dd className="text-gray-700 dark:text-gray-300">{alert.data.triesNumber}</dd>
+                  <dt className="text-xs text-muted-foreground">Tentatives</dt>
+                  <dd className="text-sm text-foreground">{alert.data.triesNumber}</dd>
                 </div>
               )}
               {alert.data.retryDate && (
                 <div className="flex justify-between items-start">
-                  <dt className="text-gray-500 dark:text-gray-400">Date de retry</dt>
-                  <dd className="text-right text-gray-700 dark:text-gray-300">{formatDateTime(alert.data.retryDate)}</dd>
+                  <dt className="text-xs text-muted-foreground">Date de retry</dt>
+                  <dd className="text-sm text-right text-foreground">{formatDateTime(alert.data.retryDate)}</dd>
                 </div>
               )}
             </dl>
           </div>
 
-          <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-5">
-            <h2 className="font-medium text-gray-900 dark:text-gray-100 mb-4">Historique</h2>
+          <div className={styles.card.withPadding}>
+            <h2 className="font-medium text-foreground mb-3">Activités</h2>
             <div className="space-y-4">
               <div className="flex gap-3">
                 <div className="w-2 h-2 rounded-full bg-amber-500 mt-2 shrink-0" />
                 <div>
-                  <p className="font-medium text-gray-900 dark:text-gray-100 text-sm">Alerte détectée</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">{formatTimeAgo(alert.detectedAt)}</p>
+                  <p className="text-sm font-medium text-foreground">Alerte détectée</p>
+                  <p className="text-xs text-muted-foreground">{formatTimeAgo(alert.detectedAt)}</p>
                 </div>
               </div>
 
               {history.map((entry) => (
                 <div key={entry.id} className="flex gap-3">
-                  <div className={`w-2 h-2 rounded-full ${getStatusColor(entry.action)} mt-2 shrink-0`} />
+                  <div className={`w-2 h-2 rounded-full ${getDotColorByAction(entry.action)} mt-2 shrink-0`} />
                   <div>
-                    <p className="font-medium text-gray-900 dark:text-gray-100 text-sm">
+                    <p className="text-sm font-medium text-foreground">
                       {ACTION_LABELS[entry.action] || entry.action}
                     </p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                    <p className="text-xs text-muted-foreground">
                       {entry.performed_by} • {formatTimeAgo(new Date(entry.performed_at))}
                     </p>
                   </div>

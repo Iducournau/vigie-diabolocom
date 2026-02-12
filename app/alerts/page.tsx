@@ -4,7 +4,6 @@ import { useEffect, useState, useMemo } from "react";
 import {
   ColumnDef,
   SortingState,
-  VisibilityState,
   flexRender,
   getCoreRowModel,
   getFilteredRowModel,
@@ -25,17 +24,14 @@ import {
   MoreHorizontal,
   CheckCircle2,
   XCircle,
-  Eye,
   Loader2,
   Circle,
   Clock,
-  Settings2,
   CheckIcon,
   PlusCircle,
   RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import {
@@ -45,7 +41,6 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-  DropdownMenuCheckboxItem,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import {
@@ -78,21 +73,23 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { Severity, AlertStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { styles } from "@/lib/styles";
 import {
-  RULES_MAP,
   CAMPAIGNS_MAP,
   LEAD_SOURCES,
   getCampaignName,
-  getRuleInfo,
+  SEVERITY_LABELS,
   mapStatus,
   formatTimeAgo,
+  formatDateTime,
+  formatPhone,
   getLeadSourceInfo,
 } from "@/lib/constants";
+import { useRules, getRuleInfo } from "@/lib/rules";
 
 // Types
 interface AlertRow {
@@ -105,17 +102,11 @@ interface AlertRow {
   campaign: string;
   campaignId: string;
   detectedAt: Date;
-  agent?: string;
   leadSource?: string;
-  // Colonnes dynamiques (depuis alert_data)
-  lastCall?: Date;
   wrapup?: string;
-  talkDuration?: number;
-  tryNumber?: number;
   callCount?: number;
-  wrapupList?: string;
-  retryDate?: Date;
-  delayHours?: number;
+  phone?: string;
+  createdAt?: Date;
 }
 
 // Options pour les filtres avec icônes
@@ -132,11 +123,6 @@ const statusOptions = [
   { label: "Ignorée", value: "dismissed", icon: XCircle },
 ];
 
-const ruleOptions = Object.entries(RULES_MAP).map(([id, rule]) => ({
-  label: rule.name,
-  value: id,
-}));
-
 const campaignOptions = Object.entries(CAMPAIGNS_MAP).map(([id, name]) => ({
   label: name,
   value: id,
@@ -146,25 +132,6 @@ const sourceOptions = Object.entries(LEAD_SOURCES).map(([key, info]) => ({
   label: info.label,
   value: key,
 }));
-
-// Labels des colonnes pour le bouton View
-const columnLabels: Record<string, string> = {
-  contactId: "Contact",
-  ruleName: "Règle",
-  status: "Statut",
-  campaign: "Formation",
-  leadSource: "Source",
-  agent: "Agent",
-  detectedAt: "Détecté",
-  lastCall: "Dernier appel",
-  wrapup: "Wrapup",
-  talkDuration: "Durée conversation",
-  tryNumber: "N° tentative",
-  callCount: "Nb appels",
-  wrapupList: "Liste wrapups",
-  retryDate: "Date retry",
-  delayHours: "Délai (h)",
-};
 
 // Composant Faceted Filter inline
 interface FacetedFilterProps {
@@ -250,7 +217,7 @@ function FacetedFilter({
                   >
                     <div
                       className={cn(
-                        "mr-2 flex h-4 w-4 shrink-0 items-center justify-center rounded-[3px] border border-gray-300 dark:border-gray-600",
+                        "mr-2 flex h-4 w-4 shrink-0 items-center justify-center rounded-[3px] border border-border",
                         isSelected
                           ? "bg-primary border-primary text-primary-foreground"
                           : "[&_svg]:invisible"
@@ -294,33 +261,10 @@ function FacetedFilter({
 // Colonnes du tableau
 const columns: ColumnDef<AlertRow>[] = [
   {
-    id: "select",
-    header: ({ table }) => (
-      <Checkbox
-        checked={
-          table.getIsAllPageRowsSelected() ||
-          (table.getIsSomePageRowsSelected() && "indeterminate")
-        }
-        onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
-        aria-label="Tout sélectionner"
-      />
-    ),
-    cell: ({ row }) => (
-      <Checkbox
-        checked={row.getIsSelected()}
-        onCheckedChange={(value) => row.toggleSelected(!!value)}
-        aria-label="Sélectionner"
-      />
-    ),
-    enableSorting: false,
-    enableHiding: false,
-    size: 40,
-  },
-  {
     accessorKey: "contactId",
     header: () => <span className="text-sm font-medium">Contact</span>,
     cell: ({ row }) => (
-      <div className="w-[80px]">{row.getValue("contactId")}</div>
+      <div className="w-[80px] text-sm font-medium">{row.getValue("contactId")}</div>
     ),
   },
   {
@@ -332,7 +276,7 @@ const columns: ColumnDef<AlertRow>[] = [
             <Button
               variant="ghost"
               size="sm"
-              className="-ml-3 h-8 data-[state=open]:bg-accent"
+              className="-ml-3 h-8 text-sm font-medium data-[state=open]:bg-accent"
             >
               <span>Règle</span>
               <ChevronsUpDown className="size-4" />
@@ -351,14 +295,20 @@ const columns: ColumnDef<AlertRow>[] = [
         </DropdownMenu>
       </div>
     ),
+    cell: ({ row }) => (
+      <span className="text-sm text-muted-foreground">{row.getValue("ruleName")}</span>
+    ),
+  },
+  {
+    accessorKey: "severity",
+    header: () => <span className="text-sm font-medium">Sévérité</span>,
     cell: ({ row }) => {
-      const severity = row.original.severity;
+      const severity = row.getValue("severity") as Severity;
       return (
-        <div className="flex gap-2">
-          <Badge variant={severity}>{row.getValue("ruleName")}</Badge>
-        </div>
+        <Badge variant={severity}>{SEVERITY_LABELS[severity]}</Badge>
       );
     },
+    filterFn: (row, id, value) => value.includes(row.getValue(id)),
   },
   {
     accessorKey: "status",
@@ -369,9 +319,9 @@ const columns: ColumnDef<AlertRow>[] = [
             <Button
               variant="ghost"
               size="sm"
-              className="-ml-3 h-8 data-[state=open]:bg-accent"
+              className="-ml-3 h-8 text-sm font-medium data-[state=open]:bg-accent"
             >
-              <span>Statut</span>
+              <span>État</span>
               <ChevronsUpDown className="size-4" />
             </Button>
           </DropdownMenuTrigger>
@@ -406,13 +356,29 @@ const columns: ColumnDef<AlertRow>[] = [
       const config = statusConfig[status] || statusConfig.new;
       const Icon = config.icon;
       return (
-        <div className="flex w-[100px] items-center gap-2">
-          <Icon className="text-muted-foreground size-4" />
+        <div className="flex w-[100px] items-center gap-2 text-sm text-muted-foreground">
+          <Icon className="size-4" />
           <span>{config.label}</span>
         </div>
       );
     },
     filterFn: (row, id, value) => value.includes(row.getValue(id)),
+  },
+  {
+    accessorKey: "leadSource",
+    header: () => <span className="text-sm font-medium">Source</span>,
+    cell: ({ row }) => {
+      const source = row.getValue("leadSource") as string | undefined;
+      const sourceInfo = getLeadSourceInfo(source);
+      return (
+        <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+          <span>{sourceInfo.icon}</span>
+          <span className="max-w-[100px] truncate">
+            {sourceInfo.label}
+          </span>
+        </div>
+      );
+    },
   },
   {
     accessorKey: "campaign",
@@ -423,7 +389,7 @@ const columns: ColumnDef<AlertRow>[] = [
             <Button
               variant="ghost"
               size="sm"
-              className="-ml-3 h-8 data-[state=open]:bg-accent"
+              className="-ml-3 h-8 text-sm font-medium data-[state=open]:bg-accent"
             >
               <span>Formation</span>
               <ChevronsUpDown className="size-4" />
@@ -443,35 +409,43 @@ const columns: ColumnDef<AlertRow>[] = [
       </div>
     ),
     cell: ({ row }) => (
-      <span className="max-w-[200px] truncate font-medium">
+      <span className="max-w-[200px] truncate text-sm text-muted-foreground">
         {row.getValue("campaign")}
       </span>
     ),
   },
   {
-    accessorKey: "leadSource",
-    header: () => <span className="text-sm font-medium">Source</span>,
+    accessorKey: "phone",
+    header: () => <span className="text-sm font-medium">Téléphone</span>,
     cell: ({ row }) => {
-      const source = row.getValue("leadSource") as string | undefined;
-      const sourceInfo = getLeadSourceInfo(source);
+      const phone = row.getValue("phone") as string | undefined;
       return (
-        <div className="flex items-center gap-1.5">
-          <span className="text-sm">{sourceInfo.icon}</span>
-          <span className="text-xs text-muted-foreground max-w-[100px] truncate">
-            {sourceInfo.label}
-          </span>
-        </div>
+        <span className="text-sm text-muted-foreground">
+          {phone ? formatPhone(phone) : "—"}
+        </span>
       );
     },
   },
   {
-    accessorKey: "agent",
-    header: () => <span className="text-sm font-medium">Agent</span>,
+    accessorKey: "wrapup",
+    header: () => <span className="text-sm font-medium">Code clôture</span>,
     cell: ({ row }) => (
-      <span className="text-muted-foreground">
-        {row.getValue("agent") || "—"}
+      <span className="text-sm text-muted-foreground">
+        {row.getValue("wrapup") || "—"}
       </span>
     ),
+  },
+  {
+    accessorKey: "callCount",
+    header: () => <span className="text-sm font-medium">Nb appels</span>,
+    cell: ({ row }) => {
+      const value = row.getValue("callCount") as number | undefined;
+      return (
+        <span className="text-sm text-muted-foreground">
+          {value !== undefined ? value : "—"}
+        </span>
+      );
+    },
   },
   {
     accessorKey: "detectedAt",
@@ -482,7 +456,7 @@ const columns: ColumnDef<AlertRow>[] = [
             <Button
               variant="ghost"
               size="sm"
-              className="-ml-3 h-8 data-[state=open]:bg-accent"
+              className="-ml-3 h-8 text-sm font-medium data-[state=open]:bg-accent"
             >
               <span>Détecté</span>
               <ChevronsUpDown className="size-4" />
@@ -502,98 +476,19 @@ const columns: ColumnDef<AlertRow>[] = [
       </div>
     ),
     cell: ({ row }) => (
-      <span className="text-muted-foreground">
+      <span className="text-sm text-muted-foreground">
         {formatTimeAgo(row.getValue("detectedAt"))}
       </span>
     ),
   },
-  // Colonnes dynamiques (masquées par défaut)
   {
-    accessorKey: "lastCall",
-    header: () => <span className="text-sm font-medium">Dernier appel</span>,
+    accessorKey: "createdAt",
+    header: () => <span className="text-sm font-medium">Créé le</span>,
     cell: ({ row }) => {
-      const value = row.getValue("lastCall") as Date | undefined;
+      const value = row.getValue("createdAt") as Date | undefined;
       return (
-        <span className="text-muted-foreground">
-          {value ? formatTimeAgo(value) : "—"}
-        </span>
-      );
-    },
-  },
-  {
-    accessorKey: "wrapup",
-    header: () => <span className="text-sm font-medium">Wrapup</span>,
-    cell: ({ row }) => (
-      <span className="text-muted-foreground">
-        {row.getValue("wrapup") || "—"}
-      </span>
-    ),
-  },
-  {
-    accessorKey: "talkDuration",
-    header: () => <span className="text-sm font-medium">Durée (s)</span>,
-    cell: ({ row }) => {
-      const value = row.getValue("talkDuration") as number | undefined;
-      return (
-        <span className="text-muted-foreground">
-          {value !== undefined ? `${value}s` : "—"}
-        </span>
-      );
-    },
-  },
-  {
-    accessorKey: "tryNumber",
-    header: () => <span className="text-sm font-medium">N° tent.</span>,
-    cell: ({ row }) => {
-      const value = row.getValue("tryNumber") as number | undefined;
-      return (
-        <span className="text-muted-foreground">
-          {value !== undefined ? value : "—"}
-        </span>
-      );
-    },
-  },
-  {
-    accessorKey: "callCount",
-    header: () => <span className="text-sm font-medium">Nb appels</span>,
-    cell: ({ row }) => {
-      const value = row.getValue("callCount") as number | undefined;
-      return (
-        <span className="text-muted-foreground">
-          {value !== undefined ? value : "—"}
-        </span>
-      );
-    },
-  },
-  {
-    accessorKey: "wrapupList",
-    header: () => <span className="text-sm font-medium">Wrapups</span>,
-    cell: ({ row }) => (
-      <span className="text-muted-foreground max-w-[150px] truncate">
-        {row.getValue("wrapupList") || "—"}
-      </span>
-    ),
-  },
-  {
-    accessorKey: "retryDate",
-    header: () => <span className="text-sm font-medium">Date retry</span>,
-    cell: ({ row }) => {
-      const value = row.getValue("retryDate") as Date | undefined;
-      return (
-        <span className="text-muted-foreground">
-          {value ? formatTimeAgo(value) : "—"}
-        </span>
-      );
-    },
-  },
-  {
-    accessorKey: "delayHours",
-    header: () => <span className="text-sm font-medium">Délai (h)</span>,
-    cell: ({ row }) => {
-      const value = row.getValue("delayHours") as number | undefined;
-      return (
-        <span className="text-muted-foreground">
-          {value !== undefined ? `${value}h` : "—"}
+        <span className="text-sm text-muted-foreground">
+          {value ? formatDateTime(value) : "—"}
         </span>
       );
     },
@@ -610,6 +505,7 @@ const columns: ColumnDef<AlertRow>[] = [
               variant="ghost"
               size="icon"
               className="size-8 data-[state=open]:bg-muted"
+              onClick={(e) => e.stopPropagation()}
             >
               <MoreHorizontal className="size-4" />
               <span className="sr-only">Menu</span>
@@ -617,18 +513,12 @@ const columns: ColumnDef<AlertRow>[] = [
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuLabel>Actions</DropdownMenuLabel>
-            <DropdownMenuItem asChild>
-              <Link href={`/alerts/${alert.id}`}>
-                <Eye className="size-4" />
-                Voir détail
-              </Link>
-            </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => meta?.onAction?.(alert.id, "resolved")}>
+            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); meta?.onAction?.(alert.id, "resolved"); }}>
               <CheckCircle2 className="size-4" />
               Résoudre
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => meta?.onAction?.(alert.id, "ignored")}>
+            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); meta?.onAction?.(alert.id, "ignored"); }}>
               <XCircle className="size-4" />
               Ignorer
             </DropdownMenuItem>
@@ -640,24 +530,14 @@ const columns: ColumnDef<AlertRow>[] = [
 ];
 
 export default function AlertsPage() {
+  const router = useRouter();
+  const { rules, rulesMap, loading: rulesLoading } = useRules();
   const [data, setData] = useState<AlertRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [sorting, setSorting] = useState<SortingState>([
     { id: "detectedAt", desc: true },
   ]);
-  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({
-    // Colonnes dynamiques masquées par défaut
-    lastCall: false,
-    wrapup: false,
-    talkDuration: false,
-    tryNumber: false,
-    callCount: false,
-    wrapupList: false,
-    retryDate: false,
-    delayHours: false,
-  });
-  const [rowSelection, setRowSelection] = useState({});
   const [globalFilter, setGlobalFilter] = useState("");
 
   // Filtres
@@ -666,6 +546,11 @@ export default function AlertsPage() {
   const [ruleFilter, setRuleFilter] = useState<Set<string>>(new Set());
   const [campaignFilter, setCampaignFilter] = useState<Set<string>>(new Set());
   const [sourceFilter, setSourceFilter] = useState<Set<string>>(new Set());
+
+  const ruleOptions = useMemo(() =>
+    rules.filter(r => r.is_active).map(r => ({ label: r.name, value: r.id })),
+    [rules]
+  );
 
   async function fetchAlerts() {
     try {
@@ -682,7 +567,7 @@ export default function AlertsPage() {
       }
 
       const transformed: AlertRow[] = (alertsData || []).map((data) => {
-        const ruleInfo = getRuleInfo(data.rule_id);
+        const ruleInfo = getRuleInfo(rulesMap, data.rule_id);
         let alertData: any = {};
         if (typeof data.alert_data === "string") {
           try {
@@ -705,19 +590,11 @@ export default function AlertsPage() {
           campaign: getCampaignName(data.campaign),
           campaignId: data.campaign,
           detectedAt: new Date(data.detected_at),
-          agent: alertData.user_login1 || alertData.user_login || alertData.agent || alertData.lastUpdatedBy || data.agent_name,
           leadSource: data.lead_source || undefined,
-          // Colonnes dynamiques depuis alert_data
-          lastCall: alertData.last_call || alertData.call_start
-            ? new Date(alertData.last_call || alertData.call_start)
-            : undefined,
           wrapup: alertData.wrapup || alertData.wrapup_name,
-          talkDuration: alertData.talk_duration,
-          tryNumber: alertData.try_number,
           callCount: alertData.call_count || alertData.total_calls,
-          wrapupList: alertData.wrapup_list,
-          retryDate: alertData.retry_date ? new Date(alertData.retry_date) : undefined,
-          delayHours: alertData.delay_hours || alertData.hours_since_retry,
+          phone: data.phone || alertData.phone || undefined,
+          createdAt: data.created_at_lead ? new Date(data.created_at_lead) : undefined,
         };
       });
 
@@ -730,8 +607,10 @@ export default function AlertsPage() {
   }
 
   useEffect(() => {
-    fetchAlerts();
-  }, []);
+    if (!rulesLoading) {
+      fetchAlerts();
+    }
+  }, [rulesLoading]);
 
   // Filtrage des données
   const filteredData = useMemo(() => {
@@ -753,8 +632,7 @@ export default function AlertsPage() {
         return (
           alert.contactId.toLowerCase().includes(search) ||
           alert.ruleName.toLowerCase().includes(search) ||
-          alert.campaign.toLowerCase().includes(search) ||
-          (alert.agent && alert.agent.toLowerCase().includes(search))
+          alert.campaign.toLowerCase().includes(search)
         );
       }
       return true;
@@ -794,12 +672,8 @@ export default function AlertsPage() {
     getPaginationRowModel: getPaginationRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
-    onColumnVisibilityChange: setColumnVisibility,
-    onRowSelectionChange: setRowSelection,
     state: {
       sorting,
-      columnVisibility,
-      rowSelection,
     },
     initialState: {
       pagination: {
@@ -848,31 +722,6 @@ export default function AlertsPage() {
     return true;
   }
 
-  // Actions de masse
-  async function handleBulkAction(action: "resolved" | "ignored") {
-    const selectedRows = table.getFilteredSelectedRowModel().rows;
-    if (selectedRows.length === 0) return;
-
-    const promises = selectedRows.map((row) =>
-      updateAlertStatus(row.original.id, action)
-    );
-
-    const results = await Promise.all(promises);
-    const successCount = results.filter(Boolean).length;
-
-    if (successCount > 0) {
-      toast.success(
-        action === "resolved"
-          ? `${successCount} alerte(s) résolue(s)`
-          : `${successCount} alerte(s) ignorée(s)`
-      );
-      table.resetRowSelection();
-      fetchAlerts();
-    } else {
-      toast.error("Erreur lors de la mise à jour");
-    }
-  }
-
   // Action individuelle
   async function handleSingleAction(alertId: string, action: "resolved" | "ignored") {
     const success = await updateAlertStatus(alertId, action);
@@ -905,8 +754,6 @@ export default function AlertsPage() {
       setRefreshing(false);
     }
   }
-
-  const selectedCount = table.getFilteredSelectedRowModel().rows.length;
 
   if (loading) {
     return (
@@ -999,77 +846,17 @@ export default function AlertsPage() {
             )}
           </div>
 
-          {/* Bouton View */}
-          <div className="flex items-center gap-2">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="ml-auto hidden h-8 lg:flex"
-                >
-                  <Settings2 className="size-4" />
-                  View
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-[180px]">
-                <DropdownMenuLabel>Afficher/Masquer</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                {table
-                  .getAllColumns()
-                  .filter(
-                    (column) =>
-                      typeof column.accessorFn !== "undefined" &&
-                      column.getCanHide()
-                  )
-                  .map((column) => {
-                    const label = columnLabels[column.id] || column.id;
-                    return (
-                      <DropdownMenuCheckboxItem
-                        key={column.id}
-                        checked={column.getIsVisible()}
-                        onCheckedChange={(value) =>
-                          column.toggleVisibility(!!value)
-                        }
-                      >
-                        {label}
-                      </DropdownMenuCheckboxItem>
-                    );
-                  })}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
         </div>
-
-        {/* Actions de masse */}
-        {selectedCount > 0 && (
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">
-              {selectedCount} sélectionnée{selectedCount > 1 ? "s" : ""}
-            </span>
-            <Button variant="outline" size="sm" onClick={() => handleBulkAction("resolved")}>
-              <CheckCircle2 className="size-4" />
-              Résoudre
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => handleBulkAction("ignored")}>
-              <XCircle className="size-4" />
-              Ignorer
-            </Button>
-          </div>
-        )}
       </div>
 
       {/* Table */}
-      <div className="overflow-hidden rounded-md border">
+      <div className="overflow-hidden rounded-md border border-border">
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
-                  <TableHead
-                    key={header.id}
-                    className={header.id === "select" ? "w-[40px]" : undefined}
-                  >
+                  <TableHead key={header.id}>
                     {header.isPlaceholder
                       ? null
                       : flexRender(
@@ -1086,13 +873,11 @@ export default function AlertsPage() {
               table.getRowModel().rows.map((row) => (
                 <TableRow
                   key={row.id}
-                  data-state={row.getIsSelected() && "selected"}
+                  className="cursor-pointer"
+                  onClick={() => router.push(`/alerts/${row.original.id}`)}
                 >
                   {row.getVisibleCells().map((cell) => (
-                    <TableCell
-                      key={cell.id}
-                      className={cell.column.id === "select" ? "w-[40px]" : undefined}
-                    >
+                    <TableCell key={cell.id}>
                       {flexRender(
                         cell.column.columnDef.cell,
                         cell.getContext()
@@ -1123,7 +908,7 @@ export default function AlertsPage() {
       {/* Pagination */}
       <div className="flex items-center justify-between px-2">
         <div className="text-muted-foreground flex-1 text-sm">
-          {selectedCount} sur {filteredData.length} ligne(s) sélectionnée(s).
+          {filteredData.length} résultat{filteredData.length > 1 ? "s" : ""}
         </div>
         <div className="flex items-center space-x-6 lg:space-x-8">
           <div className="flex items-center space-x-2">

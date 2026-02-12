@@ -8,7 +8,7 @@ import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Severity } from "@/lib/types";
 import { styles } from "@/lib/styles";
-import { RULES_MAP, getRuleInfo } from "@/lib/constants";
+import { useRules, getRuleInfo } from "@/lib/rules";
 
 // Types
 interface Rule {
@@ -71,13 +71,16 @@ function TechBadge({ text }: { text: string }) {
 }
 
 export default function RulesPage() {
+  const { rulesMap, loading: rulesLoading } = useRules();
   const [rules, setRules] = useState<Rule[]>([]);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchRules();
-  }, []);
+    if (!rulesLoading) {
+      fetchRules();
+    }
+  }, [rulesLoading]);
 
   async function fetchRules() {
     setLoading(true);
@@ -112,7 +115,7 @@ export default function RulesPage() {
 
     // Transformer les données
     const transformedRules: Rule[] = (rulesData || []).map((rule) => {
-      const ruleInfo = getRuleInfo(rule.id);
+      const ruleInfo = getRuleInfo(rulesMap, rule.id);
       const config = RULES_CONFIG[rule.id];
 
       if (!config) {

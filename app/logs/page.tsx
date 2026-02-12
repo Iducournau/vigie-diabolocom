@@ -7,7 +7,8 @@ import { CheckCircle2, XCircle, Clock, Database, Loader2, RefreshCw } from "luci
 import { Button } from "@/components/ui/button";
 import { styles } from "@/lib/styles";
 import { statsCardVariants } from "@/lib/styles";
-import { RULES_MAP, getRuleInfo, formatTimeAgo, formatDateTime } from "@/lib/constants";
+import { formatTimeAgo, formatDateTime } from "@/lib/constants";
+import { useRules, getRuleInfo } from "@/lib/rules";
 
 interface Log {
   id: string;
@@ -20,6 +21,7 @@ interface Log {
 }
 
 export default function LogsPage() {
+  const { rulesMap, loading: rulesLoading } = useRules();
   const [logs, setLogs] = useState<Log[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -39,8 +41,10 @@ export default function LogsPage() {
   }
 
   useEffect(() => {
-    fetchLogs();
-  }, []);
+    if (!rulesLoading) {
+      fetchLogs();
+    }
+  }, [rulesLoading]);
 
   async function handleRefresh() {
     setRefreshing(true);
@@ -183,7 +187,7 @@ export default function LogsPage() {
                   </td>
                   <td className={styles.table.cell}>
                     <span className="text-sm text-gray-700 dark:text-gray-300">
-                      {getRuleInfo(log.rule_id).name}
+                      {getRuleInfo(rulesMap, log.rule_id).name}
                     </span>
                   </td>
                   <td className={styles.table.cell}>

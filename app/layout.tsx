@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Outfit } from "next/font/google";
 import "./globals.css";
 import { Sidebar } from "@/components/sidebar";
 import { SidebarProvider } from "@/components/sidebar-context";
@@ -8,7 +8,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { FeedbackButton } from "@/components/feedback-button";
 import { Toaster } from "sonner";
 
-const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
+const outfit = Outfit({ subsets: ["latin"], variable: "--font-outfit" });
 
 export const metadata: Metadata = {
   title: "Vigie Diabolocom",
@@ -22,7 +22,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="fr" suppressHydrationWarning>
-      <body className={`${inter.variable} font-sans antialiased`}>
+      <body className={`${outfit.variable} font-sans antialiased`}>
         <ThemeProvider
           attribute="class"
           defaultTheme="system"
