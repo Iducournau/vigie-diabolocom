@@ -568,17 +568,19 @@ export default function AlertsPage() {
 
       const transformed: AlertRow[] = (alertsData || []).map((data) => {
         const ruleInfo = getRuleInfo(rulesMap, data.rule_id);
-        let alertData: any = {};
-        if (typeof data.alert_data === "string") {
+
+        // Parse call_history pour extraire wrapup et callCount
+        let callHistory: any[] = [];
+        if (data.call_history) {
           try {
-            alertData = JSON.parse(data.alert_data);
+            const parsed = typeof data.call_history === "string" ? JSON.parse(data.call_history) : data.call_history;
+            const arr = Array.isArray(parsed) ? parsed : (parsed?.callHistory || []);
+            callHistory = Array.isArray(arr) ? arr : [];
           } catch (e) {
-            console.error(`Failed to parse alert_data for alert ${data.id}:`, e);
-            alertData = {};
+            callHistory = [];
           }
-        } else {
-          alertData = data.alert_data || {};
         }
+        const lastCall = callHistory[0];
 
         return {
           id: data.id,
@@ -591,9 +593,9 @@ export default function AlertsPage() {
           campaignId: data.campaign,
           detectedAt: new Date(data.detected_at),
           leadSource: data.lead_source || undefined,
-          wrapup: alertData.wrapup || alertData.wrapup_name,
-          callCount: alertData.call_count || alertData.total_calls,
-          phone: data.phone || alertData.phone || undefined,
+          wrapup: lastCall?.wrapup_name || lastCall?.wrapup || undefined,
+          callCount: callHistory.length || undefined,
+          phone: data.phone || undefined,
           createdAt: data.created_at_lead ? new Date(data.created_at_lead) : undefined,
         };
       });

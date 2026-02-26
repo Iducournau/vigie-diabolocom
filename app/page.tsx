@@ -460,17 +460,6 @@ export default function DashboardPage() {
 
     const transformedRecent: AlertRow[] = (recentData || []).map((data) => {
       const ruleInfo = getRuleInfo(rulesMap, data.rule_id);
-      let alertData: any = {};
-      if (typeof data.alert_data === "string") {
-        try {
-          alertData = JSON.parse(data.alert_data);
-        } catch (e) {
-          console.error(`Failed to parse alert_data for alert ${data.id}:`, e);
-          alertData = {};
-        }
-      } else {
-        alertData = data.alert_data || {};
-      }
 
       return {
         id: data.id,
@@ -482,7 +471,7 @@ export default function DashboardPage() {
         campaign: getCampaignName(data.campaign),
         campaignId: data.campaign,
         detectedAt: new Date(data.detected_at),
-        agent: alertData.agent || alertData.user_login1,
+        agent: data.agent_name || undefined,
       };
     });
     setRecentAlerts(transformedRecent);
