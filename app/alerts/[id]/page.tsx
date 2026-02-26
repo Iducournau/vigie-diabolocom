@@ -16,7 +16,6 @@ import {
 import { toast } from "sonner";
 import {
   ArrowLeft,
-  ExternalLink,
   CheckCircle2,
   XCircle,
   Eye,
@@ -396,16 +395,6 @@ export default function AlertDetailPage() {
               Rouvrir
             </Button>
           )}
-          <Button variant="outline" size="sm" asChild>
-            <a
-              href={`https://youschool.diabolocom.com/desk/campaign-contacts/${alert.contactId}`}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <ExternalLink className="h-4 w-4 mr-2" />
-              Diabolocom
-            </a>
-          </Button>
         </div>
       </div>
 
