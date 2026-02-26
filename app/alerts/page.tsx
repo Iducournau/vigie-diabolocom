@@ -634,7 +634,8 @@ export default function AlertsPage() {
         return (
           alert.contactId.toLowerCase().includes(search) ||
           alert.ruleName.toLowerCase().includes(search) ||
-          alert.campaign.toLowerCase().includes(search)
+          alert.campaign.toLowerCase().includes(search) ||
+          (alert.phone && alert.phone.toLowerCase().includes(search))
         );
       }
       return true;
@@ -796,7 +797,7 @@ export default function AlertsPage() {
           <div className="flex flex-1 items-center gap-2">
             {/* Recherche sans icône */}
             <Input
-              placeholder="Filtrer les alertes..."
+              placeholder="Rechercher (contact, tel, formation...)"
               value={globalFilter}
               onChange={(e) => setGlobalFilter(e.target.value)}
               className="h-8 w-[150px] lg:w-[250px]"
